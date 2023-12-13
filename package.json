@@ -2,14 +2,16 @@
   "name": "regulars_board",
   "version": "1.0.0",
   "description": "",
+  "type": "module",
   "main": "src/index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "start": "node ." 
+    "start": "node ."
   },
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "dotenv": "^16.3.1",
     "websocket": "^1.0.34"
   }
 }
