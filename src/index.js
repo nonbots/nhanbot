@@ -3,13 +3,10 @@ import "dotenv/config";
 import websocket from "websocket";
 const { client: WebSocketClient } = websocket;
 
-import {
-  parseCommand,
-  parseMessage,
-  parseTags,
-  parseSource,
-  parseParameters,
-} from "./parse/index.js";
+import { CommandManager } from "./commandManager.js";
+const commandManager = new CommandManager();
+
+import { isSentByStreamer } from "./permissions.js";
 
 const client = new WebSocketClient();
 
@@ -25,7 +22,7 @@ console.log({
 });
 
 const moveMessage = "Get up and move, your body will thank you!";
-const defaultMoveInterval = 1000 * 60 * 1; // Set to 1 minute for testing.
+const defaultMoveInterval = 60000 * 60 * 1; // Set to 1 minute for testing.
 let moveInterval = defaultMoveInterval;
 
 client.on("connectFailed", function (error) {
@@ -68,115 +65,52 @@ client.on("connect", function (connection) {
   });
 
   // Process the Twitch IRC message.
+  connection.on("message", commandManager.onMessage.bind(commandManager)); ///the a new function of onMessage with the commandManager as the execution context
+  commandManager.addCommand("ping", (message) => {
+    connection.sendUTF(`PRIVMSG ${message.command.channel} : pong`);
+  });
+  commandManager.addCommand("move", (message) => {
+    console.log("THE MESSAGE", message);
+    if (!isSentByStreamer(message)) return;
+    // Assumes the command's parameter is well formed (e.g., !move 15).
+    // console.log(`recieved move `, parsedMessage.command);
+    // console.log(parsedMessage.command.channel, channel);
+    let updateInterval = message.command.botCommandParams
+      ? parseInt(message.command.botCommandParams) * 1000 * 60
+      : defaultMoveInterval;
 
-  connection.on("message", function (ircMessage) {
-    // console.log({ ircMessage });
-    //onMessage me
-    if (ircMessage.type === "utf8") {
-      let rawIrcMessage = ircMessage.utf8Data.trimEnd();
-      console.log(
-        `Message received (${new Date().toISOString()}): '${rawIrcMessage}'\n`
-      );
+    if (moveInterval === updateInterval) return;
+    // Valid range: 1 minute to 60 minutes
+    if (updateInterval < 60000 || updateInterval > 3600000) return;
+    moveInterval = updateInterval;
+    console.log("THIS IS THE MOVEINTERVAL", moveInterval);
 
-      let messages = rawIrcMessage.split("\r\n"); // The IRC message may contain one or more messages.
-      messages.forEach((message) => {
-        let parsedMessage = parseMessage(message); // parse the messages into different components {  // Contains the component parts.
-        /*
-                tags: null,
-                source: null, // returns source {} 
-                command: null, // {command: JOIN, channel: #bar}
-                parameters: null
-            };*/
+    // Reset the timer.
+    clearInterval(intervalObj);
+    intervalObj = null;
+    intervalObj = setInterval(moveCommandAction, moveInterval);
+  });
 
-        console.log("THIS IS THE PARSEDMESSAGE:", parsedMessage);
+  commandManager.addCommand("moveoff", (message) => {
+    if (!isSentByStreamer(message)) return;
+    clearInterval(intervalObj);
+  });
 
-        if (parsedMessage) {
-          // console.log(`Message command: ${parsedMessage.command.command}`);
-          // console.log(`\n${JSON.stringify(parsedMessage, null, 3)}`)
+  commandManager.addCommand("close", (message) => {
+    connection.sendUTF(`PART ${channel}`);
+    connection.close();
+  });
 
-          switch (parsedMessage.command.command) {
-            case "PRIVMSG":
-              console.log(parsedMessage.source.nick, channel);
-              if ("ping" === parsedMessage.command.botCommand) {
-                // console.log(`recieved ping `, parsedMessage.command);
-                // console.log(`PRIVMSG ${parsedMessage.command.channel} : pong`);
-                connection.sendUTF(
-                  `PRIVMSG ${parsedMessage.command.channel} : pong`
-                );
-              }
-              // Ignore all messages except the '!move' bot
-              // command. A user can post a !move command to change the
-              // interval for when the bot posts its move message.
-              else if (
-                "move" === parsedMessage.command.botCommand &&
-                parsedMessage.source.nick === channel
-              ) {
-                // Assumes the command's parameter is well formed (e.g., !move 15).
-                console.log(`recieved move `, parsedMessage.command);
-                console.log(parsedMessage.command.channel, channel);
-                let updateInterval = parsedMessage.command.botCommandParams
-                  ? parseInt(parsedMessage.command.botCommandParams) * 1000 * 60
-                  : defaultMoveInterval;
+  commandManager.addCommand("discord", (message) => {
+    connection.sendUTF(
+      `PRIVMSG ${parsedMessage.command.channel} : discord community: https://discord.gg/hkEmB9KDGT`
+    );
+  });
 
-                if (moveInterval != updateInterval) {
-                  // Valid range: 1 minute to 60 minutes
-                  if (updateInterval >= 60000 && updateInterval <= 3600000) {
-                    moveInterval = updateInterval;
-
-                    // Reset the timer.
-                    clearInterval(intervalObj);
-                    intervalObj = null;
-                    intervalObj = setInterval(moveCommandAction, moveInterval);
-                  }
-                }
-              } else if ("moveoff" === parsedMessage.command.botCommand) {
-                clearInterval(intervalObj);
-                connection.sendUTF(`PART ${channel}`);
-                connection.close();
-              } else if ("discord" === parsedMessage.command.botCommand) {
-                connection.sendUTF(
-                  `PRIVMSG ${parsedMessage.command.channel} : discord community: https://discord.gg/hkEmB9KDGT`
-                );
-              }
-
-              break;
-            case "PING":
-              connection.sendUTF("PONG " + parsedMessage.parameters);
-              break;
-            case "001":
-              // Successfully logged in, so join the channel.
-              connection.sendUTF(`JOIN ${channel}`);
-              break;
-            case "JOIN":
-              // Send the initial move message. All other move messages are
-              // sent by the timer.
-              connection.sendUTF(`PRIVMSG ${channel} :${moveMessage}`);
-              break;
-            case "PART":
-              console.log("The channel must have banned (/ban) the bot.");
-              connection.close();
-              break;
-            case "NOTICE":
-              // If the authentication failed, leave the channel.
-              // The server will close the connection.
-              if ("Login authentication failed" === parsedMessage.parameters) {
-                console.log(`Authentication failed; left ${channel}`);
-                connection.sendUTF(`PART ${channel}`);
-              } else if (
-                "You don’t have permission to perform that action" ===
-                parsedMessage.parameters
-              ) {
-                console.log(
-                  `No permission. Check if the access token is still valid. Left ${channel}`
-                );
-                connection.sendUTF(`PART ${channel}`);
-              }
-              break;
-            default: // Ignore all other IRC messages.
-          }
-        }
-      });
-    }
+  commandManager.addCommand("youtube", (message) => {
+    connection.sendUTF(
+      `PRIVMSG ${parsedMessage.command.channel} : cooking channel: www.youtube.com/@nhancooks`
+    );
   });
 });
 

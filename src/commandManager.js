@@ -1,4 +1,6 @@
-class CommandManager {
+import { parseMessage } from "./parse/index.js";
+
+export class CommandManager {
   commands = {};
 
   constructor() {}
@@ -8,6 +10,8 @@ class CommandManager {
   }
 
   onMessage(message) {
+    console.log(" WHAT IS MESSAGE TEST ", message);
+
     if (message.type === "utf8") {
       let rawIrcMessage = message.utf8Data.trimEnd();
       console.log(
@@ -25,9 +29,9 @@ class CommandManager {
           switch (parsedMessage.command.command) {
             case "PRIVMSG":
               if (
-                this.command[parsedMessage.command.botCommand] !== undefined
+                this.commands[parsedMessage.command.botCommand] !== undefined
               ) {
-                this.command[parsedMessage.command.botCommand](parsedMessage);
+                this.commands[parsedMessage.command.botCommand](parsedMessage);
               }
           }
         }
@@ -35,11 +39,3 @@ class CommandManager {
     }
   }
 }
-
-let commandManager = new CommandManager();
-console.log(commandManager);
-connection.on("message", commandManager.onMessage);
-
-commandManager.addCommand("ping", (message) => {
-  connection.sendUTF(`PRIVMSG ${message.command.channel} : pong`);
-});
