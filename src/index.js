@@ -37,12 +37,19 @@ eventSubClient.on("close", (code, description) => {
 //eventSubClient.onerror(evt);
 eventSubClient.on("connect", function (connection) {
   console.log("EventSub Client Connected")
-   connection.on("message", async (message) => {
+    let oldConnection;
+    connection.on("message", async (message) => {
         if (message.type === 'utf8') {
             let data = JSON.parse(message.utf8Data);
             if (data.metadata.message_type === "session_welcome") {
+                if (oldConnection !== undefined) oldConnection.close();
+                console.log(`close description: ${connection.closeDescription}`);
                 let responseData = await createFollowSubscription(data.payload.session.id);
                 console.log(responseData);
+            }else if (data.metadata.message_type === "session_reconnect") {
+              oldConnection = connection 
+              eventSubClient.connect(`${data.payload.session.reconnect_url}`);
+              console.log(`Reconnected to ${data.payload.session.reconnect_url}`);
             }else if (data.metadata.message_type === "notification"){
               if (IRC_connection !== undefined) {
                 IRC_connection.sendUTF(`PRIVMSG #${channel} :${data.payload.event.user_name} has followed!`);
@@ -85,7 +92,14 @@ client.on("connect", function (connection) {
   function moveCommandAction() {
     connection.sendUTF(`PRIVMSG #${channel} :${moveMessage}`);
   }
-
+ connection.on("message", function(message) {
+    if (message.type === 'utf8') {
+      if (message.utf8Data.startsWith('PING :tmi.twitch.tv')) {
+        connection.sendUTF('PONG :tmi.twitch.tv');
+        console.log("PONG SENT");
+      } 
+    }
+ });
   // This is a simple bot that doesn't need the additional
   // Twitch IRC capabilities.
 
@@ -164,13 +178,13 @@ client.on("connect", function (connection) {
 
    commandManager.addCommand("github", (message) => {
     connection.sendUTF(
-      `PRIVMSG ${commandManager.parsedMessage.command.channel} : discord community: https://github.com/nonbots`
+      `PRIVMSG ${commandManager.parsedMessage.command.channel} : Nhan's github: https://github.com/nonbots`
     );
   });
 
  commandManager.addCommand("discord", (message) => {
     connection.sendUTF(
-      `PRIVMSG ${commandManager.parsedMessage.command.channel} : discord community: https://discord.gg/hkEmB9KDGT`
+      `PRIVMSG ${commandManager.parsedMessage.command.channel} : discord community: https://discord.gg/ku8vVEmuJY`
     );
   });
 
