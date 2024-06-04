@@ -12,9 +12,11 @@ const client = new WebSocketClient();
 const eventSubClient = new WebSocketClient();
 const {
   TWITCH_TOKEN: password,
+  REFRESH_TWITCH_TOKEN: refreshPassword,
   TWITCH_CHANNEL: channel,
   TWITCH_ACCOUNT: account,
-  CLIENT_ID: client_id
+  CLIENT_ID: client_id,
+  CLIENT_SECRET: client_secret
 } = process.env;
 const BOT_ID = "987698925";
 const BROADCASTER_ID = "972045178";
@@ -45,7 +47,9 @@ eventSubClient.on("connect", function (connection) {
                 if (oldConnection !== undefined) oldConnection.close();
                 console.log(`close description: ${connection.closeDescription}`);
                 let responseData = await createFollowSubscription(data.payload.session.id);
-                console.log(responseData);
+                if(responseData.message = 'Invalid OAuth token') {
+                  const newToken = await createNewAuthToken();
+                }
             }else if (data.metadata.message_type === "session_reconnect") {
               oldConnection = connection 
               eventSubClient.connect(`${data.payload.session.reconnect_url}`);
@@ -58,7 +62,23 @@ eventSubClient.on("connect", function (connection) {
         }
     });
 });
+async function createNewAuthToken() {
+  let payload = {
+    "grant_type": "refresh_token",
+    "refresh_token": `${refreshPassword}`,
+    "client_id": `${client_id}`,
+    "client_secret": `${client_secret}`
+  }
+ let newToken = await fetch('https://id.twitch.tv/oauth2/token', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/x-www-form-urlencoded'
+    },
+    body: JSON.stringify(payload)
 
+  });
+  return await newToken.json();
+}
 async function createFollowSubscription(sessionID) {
     let payload = {
         "type": "channel.follow",
@@ -100,6 +120,10 @@ client.on("connect", function (connection) {
       } 
     }
  });
+  connection.on("message", function (message) {
+   if  
+  });
+
   // This is a simple bot that doesn't need the additional
   // Twitch IRC capabilities.
 
