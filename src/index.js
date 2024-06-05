@@ -1,5 +1,6 @@
 import "dotenv/config";
-
+import { readFileSync, writeFileSync } from 'node:fs';
+const authInfo = JSON.parse(readFileSync("auth.json", "utf8"));                  
 import websocket from "websocket";
 const { client: WebSocketClient } = websocket;
 
@@ -17,7 +18,7 @@ const {
   TWITCH_ACCOUNT: account,
   CLIENT_ID: client_id,
   CLIENT_SECRET: client_secret
-} = process.env;
+} = authInfo;
 const BOT_ID = "987698925";
 const BROADCASTER_ID = "972045178";
 const SUB_EVENT_TOKEN = password.split(':')[1];
@@ -48,7 +49,18 @@ eventSubClient.on("connect", function (connection) {
                 console.log(`close description: ${connection.closeDescription}`);
                 let responseData = await createFollowSubscription(data.payload.session.id);
                 if(responseData.message = 'Invalid OAuth token') {
-                  const newToken = await createNewAuthToken();
+                  const data = await createNewAuthToken();
+                  //console.log("DATA", data);
+                  
+                  const newToken = data.access_token;
+                  const newRefresh = data.refresh_token;
+                  authInfo.TWITCH_TOKEN = `oauth:${newToken}`;
+                  authInfo.REFRESH_TWITCH_TOKEN = newRefresh;
+                  writeFileSync("auth.json", JSON.stringify(authInfo))
+                  //IRC_connection.close();
+                  //connection.close();
+                  //client.connect("ws://irc-ws.chat.twitch.tv:80");
+                  //eventSubClient.connect("wss://eventsub.wss.twitch.tv/ws"); /// restart the program
                 }
             }else if (data.metadata.message_type === "session_reconnect") {
               oldConnection = connection 
@@ -69,12 +81,13 @@ async function createNewAuthToken() {
     "client_id": `${client_id}`,
     "client_secret": `${client_secret}`
   }
+  console.log("PAYLOAD", payload);
  let newToken = await fetch('https://id.twitch.tv/oauth2/token', {
     method: 'POST',
     headers: {
-      'Content-Type': 'application/x-www-form-urlencoded'
+    'Content-Type': 'application/x-www-form-urlencoded'
     },
-    body: JSON.stringify(payload)
+    body: new URLSearchParams(payload).toString()
 
   });
   return await newToken.json();
@@ -121,7 +134,6 @@ client.on("connect", function (connection) {
     }
  });
   connection.on("message", function (message) {
-   if  
   });
 
   // This is a simple bot that doesn't need the additional
