@@ -21,8 +21,8 @@ const {
 } = authInfo;
 const BOT_ID = "987698925";
 const BROADCASTER_ID = "972045178";
-const SUB_EVENT_TOKEN = password.split(':')[1];
-console.log({
+const SUB_EVENT_TOKEN = password;
+console.log("CHECK THIS-------->", {
   channel,
   account
 });
@@ -39,7 +39,7 @@ eventSubClient.on("close", (code, description) => {
 });
 //eventSubClient.onerror(evt);
 eventSubClient.on("connect", function (connection) {
-  console.log("EventSub Client Connected")
+  console.log("____________________EventSub Client Connected________________")
     let oldConnection;
     connection.on("message", async (message) => {
         if (message.type === 'utf8') {
@@ -48,10 +48,10 @@ eventSubClient.on("connect", function (connection) {
                 if (oldConnection !== undefined) oldConnection.close();
                 console.log(`close description: ${connection.closeDescription}`);
                 let responseData = await createFollowSubscription(data.payload.session.id);
+                console.log("CREATE FOLLOWSUBSCRIPTION", responseData); 
                 if(responseData.message = 'Invalid OAuth token') {
                   const data = await createNewAuthToken();
-                  //console.log("DATA", data);
-                  
+                console.log("CREATE NEW AUTH TOKEN", data); 
                   const newToken = data.access_token;
                   const newRefresh = data.refresh_token;
                   authInfo.TWITCH_TOKEN = `oauth:${newToken}`;
@@ -81,7 +81,6 @@ async function createNewAuthToken() {
     "client_id": `${client_id}`,
     "client_secret": `${client_secret}`
   }
-  console.log("PAYLOAD", payload);
  let newToken = await fetch('https://id.twitch.tv/oauth2/token', {
     method: 'POST',
     headers: {
@@ -167,6 +166,7 @@ client.on("connect", function (connection) {
   // Process the Twitch IRC message.
   connection.on("message", commandManager.onMessage.bind(commandManager)); ///the a new function of onMessage with the commandManager as the execution context
   commandManager.addCommand("ping", (message) => {
+    console.log("PING COMMAND", message);
     connection.sendUTF(`PRIVMSG ${message.command.channel} : pong`);
   });
   commandManager.addCommand("move", (message) => {
