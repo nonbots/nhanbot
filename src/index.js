@@ -1,6 +1,6 @@
 import "dotenv/config";
 import { readFileSync, writeFileSync } from 'node:fs';
-const authInfo = JSON.parse(readFileSync("auth.json", "utf8"));                  
+const authInfo = JSON.parse(readFileSync("../auth.json", "utf8"));                  
 import websocket from "websocket";
 const { client: WebSocketClient } = websocket;
 
@@ -21,6 +21,7 @@ const {
 } = authInfo;
 const BOT_ID = "987698925";
 const BROADCASTER_ID = "972045178";
+const IRC_TOKEN = `oauth:${password}`
 const SUB_EVENT_TOKEN = password;
 console.log("CHECK THIS-------->", {
   channel,
@@ -54,7 +55,7 @@ eventSubClient.on("connect", function (connection) {
                 console.log("CREATE NEW AUTH TOKEN", data); 
                   const newToken = data.access_token;
                   const newRefresh = data.refresh_token;
-                  authInfo.TWITCH_TOKEN = `oauth:${newToken}`;
+                  authInfo.TWITCH_TOKEN = `${newToken}`;
                   authInfo.REFRESH_TWITCH_TOKEN = newRefresh;
                   writeFileSync("auth.json", JSON.stringify(authInfo))
                   //IRC_connection.close();
@@ -143,7 +144,7 @@ client.on("connect", function (connection) {
   // Authenticate with the Twitch IRC server and then join the channel.
   // If the authentication fails, the server drops the connection.
 
-  connection.sendUTF(`PASS ${password}`);
+  connection.sendUTF(`PASS ${IRC_TOKEN}`);
   connection.sendUTF(`NICK ${account}`);
   connection.sendUTF(`JOIN #${channel}`);
 
