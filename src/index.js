@@ -1,6 +1,6 @@
 import "dotenv/config";
 import { readFileSync, writeFileSync } from 'node:fs';
-const authInfo = JSON.parse(readFileSync("../auth.json", "utf8"));                  
+const authInfo = JSON.parse(readFileSync("./auth.json", "utf8"));                  
 import websocket from "websocket";
 const { client: WebSocketClient } = websocket;
 
