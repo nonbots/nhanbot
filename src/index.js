@@ -1,37 +1,43 @@
-import authInfo from "./auth.json" assert { type: 'json' }; // eslint-disable-line
-import {writeFileSync } from 'node:fs';
+import "dotenv/config";
+import { readFileSync, writeFileSync } from 'node:fs';
+const authInfo = JSON.parse(readFileSync("./auth.json", "utf8"));                  
 import websocket from "websocket";
 const { client: WebSocketClient } = websocket;
+
 import { CommandManager } from "./commandManager.js";
-import { createNewAuthToken, createFollowSubscription } from './accessToken.js';
 const commandManager = new CommandManager();
+
 import { isSentByStreamer } from "./permissions.js";
 
-const ircClient = new WebSocketClient();
+const client = new WebSocketClient();
 const eventSubClient = new WebSocketClient();
 const {
   TWITCH_TOKEN: password,
   REFRESH_TWITCH_TOKEN: refreshPassword,
   TWITCH_CHANNEL: channel,
   TWITCH_ACCOUNT: account,
-  CLIENT_ID: ircClient_id,
-  CLIENT_SECRET: ircClient_secret,
-  BOT_ID,
-  BROADCASTER_ID,
+  CLIENT_ID: client_id,
+  CLIENT_SECRET: client_secret
 } = authInfo;
+const BOT_ID = "987698925";
+const BROADCASTER_ID = "972045178";
 const IRC_TOKEN = `oauth:${password}`
+const SUB_EVENT_TOKEN = password;
+console.log("CHECK THIS-------->", {
+  channel,
+  account
+});
 let IRC_connection;
 const moveMessage = "Get up and move, your body will thank you!";
 const defaultMoveInterval = 60000 * 60 * 1; // Set to 1 minute for testing.
 let moveInterval = defaultMoveInterval;
 
-ircClient.on("connectFailed", function (error) {
+client.on("connectFailed", function (error) {
   console.log("Connect Error: " + error.toString());
 });
 eventSubClient.on("close", (code, description) => {
-    console.log(`Websocket ircClient disconnected: ${code} - ${description}`);
+    console.log(`Websocket client disconnected: ${code} - ${description}`);
 });
-
 //eventSubClient.onerror(evt);
 eventSubClient.on("connect", function (connection) {
   console.log("____________________EventSub Client Connected________________")
@@ -43,19 +49,18 @@ eventSubClient.on("connect", function (connection) {
                 if (oldConnection !== undefined) oldConnection.close();
                 console.log(`close description: ${connection.closeDescription}`);
                 let responseData = await createFollowSubscription(data.payload.session.id);
-              if (responseData.message === 'Invalid OAuth token') {
-                  console.log("INVALID");
+                console.log("CREATE FOLLOWSUBSCRIPTION", responseData); 
+                if(responseData.message = 'Invalid OAuth token') {
                   const data = await createNewAuthToken();
-                  console.log({data});
+                console.log("CREATE NEW AUTH TOKEN", data); 
                   const newToken = data.access_token;
                   const newRefresh = data.refresh_token;
-                  authInfo.TWITCH_TOKEN = newToken;
+                  authInfo.TWITCH_TOKEN = `${newToken}`;
                   authInfo.REFRESH_TWITCH_TOKEN = newRefresh;
-                  console.log(authInfo);
-                  writeFileSync("auth.json", JSON.stringify(authInfo));
+                  writeFileSync("auth.json", JSON.stringify(authInfo))
                   //IRC_connection.close();
                   //connection.close();
-                  //ircClient.connect("ws://irc-ws.chat.twitch.tv:80");
+                  //client.connect("ws://irc-ws.chat.twitch.tv:80");
                   //eventSubClient.connect("wss://eventsub.wss.twitch.tv/ws"); /// restart the program
                 }
             }else if (data.metadata.message_type === "session_reconnect") {
@@ -70,22 +75,82 @@ eventSubClient.on("connect", function (connection) {
         }
     });
 });
-//IRC client
-ircClient.on("connect", function (connection) {
+async function createNewAuthToken() {
+  let payload = {
+    "grant_type": "refresh_token",
+    "refresh_token": `${refreshPassword}`,
+    "client_id": `${client_id}`,
+    "client_secret": `${client_secret}`
+  }
+ let newToken = await fetch('https://id.twitch.tv/oauth2/token', {
+    method: 'POST',
+    headers: {
+    'Content-Type': 'application/x-www-form-urlencoded'
+    },
+    body: new URLSearchParams(payload).toString()
+
+  });
+  return await newToken.json();
+}
+async function createFollowSubscription(sessionID) {
+    let payload = {
+        "type": "channel.follow",
+
+        "version": "2",
+        "condition": {
+            "broadcaster_user_id": BROADCASTER_ID,
+            "moderator_user_id": BOT_ID
+        },
+        "transport": {
+            "method": "websocket",
+            "session_id": sessionID
+        }
+    };
+
+     let res = await fetch('https://api.twitch.tv/helix/eventsub/subscriptions', {
+        method: 'POST',
+        headers: {
+            'Client-Id': client_id,
+            'Authorization': `Bearer ${SUB_EVENT_TOKEN}`,
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(payload)
+    });
+
+    return await res.json();
+};
+client.on("connect", function (connection) {
   console.log("WebSocket Client Connected");
   IRC_connection = connection;
+  function moveCommandAction() {
+    connection.sendUTF(`PRIVMSG #${channel} :${moveMessage}`);
+  }
+ connection.on("message", function(message) {
+    if (message.type === 'utf8') {
+      if (message.utf8Data.startsWith('PING :tmi.twitch.tv')) {
+        connection.sendUTF('PONG :tmi.twitch.tv');
+        console.log("PONG SENT");
+      } 
+    }
+ });
+  connection.on("message", function (message) {
+  });
+
+  // This is a simple bot that doesn't need the additional
+  // Twitch IRC capabilities.
+
+  // connection.sendUTF('CAP REQ :twitch.tv/commands twitch.tv/membership twitch.tv/tags');
+
+  // Authenticate with the Twitch IRC server and then join the channel.
+  // If the authentication fails, the server drops the connection.
+
   connection.sendUTF(`PASS ${IRC_TOKEN}`);
   connection.sendUTF(`NICK ${account}`);
   connection.sendUTF(`JOIN #${channel}`);
 
-  // to keep the connect by responsing back with a PONG
-  connection.on("message", function(message) {
-      if (message.type === 'utf8') {
-        if (message.utf8Data.startsWith('PING :tmi.twitch.tv')) {
-          connection.sendUTF('PONG :tmi.twitch.tv');
-        } 
-      }
-  });
+  // Set a timer to post future 'move' messages. This timer can be
+  // reset if the user passes, !move [minutes], in chat.
+  let intervalObj = setInterval(moveCommandAction, moveInterval);
 
   connection.on("error", function (error) {
     console.log("Connection Error: " + error.toString());
@@ -101,31 +166,27 @@ ircClient.on("connect", function (connection) {
 
   // Process the Twitch IRC message.
   connection.on("message", commandManager.onMessage.bind(commandManager)); ///the a new function of onMessage with the commandManager as the execution context
-
-  //add commands to commandManger instance
   commandManager.addCommand("ping", (message) => {
     console.log("PING COMMAND", message);
     connection.sendUTF(`PRIVMSG ${message.command.channel} : pong`);
-    connection.sendUTF(`PRIVMSG ${message.command.channel} : second pong`);
   });
-  // Set a timer to post future 'move' messages. This timer can be
-  // reset if the user passes, !move [minutes], in chat.
-  let intervalObj = setInterval(moveCommandAction, moveInterval);
-  function moveCommandAction() {
-    connection.sendUTF(`PRIVMSG #${channel} :${moveMessage}`);
-  }
   commandManager.addCommand("move", (message) => {
     console.log("THE MESSAGE", message);
     if (!isSentByStreamer(message)) return;
+    // Assumes the command's parameter is well formed (e.g., !move 15).
+    // console.log(`recieved move `, parsedMessage.command);
+    // console.log(parsedMessage.command.channel, channel);
     let updateInterval = message.command.botCommandParams
       ? parseInt(message.command.botCommandParams) * 1000 * 60
       : defaultMoveInterval;
 
     if (moveInterval === updateInterval) return;
+    // Valid range: 1 minute to 60 minutes
     if (updateInterval < 60000 || updateInterval > 3600000) return;
     moveInterval = updateInterval;
     console.log("THIS IS THE MOVEINTERVAL", moveInterval);
 
+    // Reset the timer.
     clearInterval(intervalObj);
     intervalObj = null;
     intervalObj = setInterval(moveCommandAction, moveInterval);
@@ -169,9 +230,8 @@ ircClient.on("connect", function (connection) {
       `PRIVMSG ${commandManager.parsedMessage.command.channel} : cooking channel: www.youtube.com/@nhancooks`
     );
   });
-
 });
 
 
-ircClient.connect("ws://irc-ws.chat.twitch.tv:80");
+client.connect("ws://irc-ws.chat.twitch.tv:80");
 eventSubClient.connect("wss://eventsub.wss.twitch.tv/ws");
