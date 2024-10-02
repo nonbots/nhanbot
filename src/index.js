@@ -166,6 +166,11 @@ client.on("connect", function (connection) {
 
   // Process the Twitch IRC message.
   connection.on("message", commandManager.onMessage.bind(commandManager)); ///the a new function of onMessage with the commandManager as the execution context
+  commandManager.addCommand("nhanify_pp_count", async(message) => {
+    const response = await fetch("https://nhanify.com/api/playlists/public");
+    const result = await response.json();
+    connection.sendUTF(`PRIVMSG ${message.command.channel} : ${result.playlists.length} public playlists`)
+  })
   commandManager.addCommand("ping", (message) => {
     console.log("PING COMMAND", message);
     connection.sendUTF(`PRIVMSG ${message.command.channel} : pong`);
