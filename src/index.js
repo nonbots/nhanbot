@@ -52,7 +52,7 @@ eventSubClient.on("connect", function (connection) {
                   authInfo.TWITCH_TOKEN = newToken;
                   authInfo.REFRESH_TWITCH_TOKEN = newRefresh;
                   console.log(authInfo);
-                  writeFileSync("auth.json", JSON.stringify(authInfo));
+                  writeFileSync("./src/auth.json", JSON.stringify(authInfo));
                   //IRC_connection.close();
                   //connection.close();
                   //ircClient.connect("ws://irc-ws.chat.twitch.tv:80");
