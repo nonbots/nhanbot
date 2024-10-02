@@ -1,0 +1,121 @@
+
+import auth from "./auth.json" assert {type: 'json'};
+import { CommandManager } from "./commandManager.js";
+const commandManager = new CommandManager();
+import { isSentByStreamer } from "./permissions.js";
+const {
+  TWITCH_TOKEN,
+  REFRESH_TWITCH_TOKEN,
+  TWITCH_CHANNEL,
+  TWITCH_ACCOUNT,
+  CLIENT_ID,
+  CLIENT_SECRET, 
+} = auth;
+import websocket from "websocket";
+const { client } = websocket;
+const ircClient = new client();
+//const eventSubClient = new WebSocketClient();
+const BOT_ID = "987698925";
+const BROADCASTER_ID = "972045178";
+const IRC_TOKEN = `oauth:${password}`
+const SUB_EVENT_TOKEN = password;
+
+
+ircClient.on("connectFailed", function (error) {
+  console.log("Connect Error: " + error.toString());
+});
+
+function ircErrorHandler (error) {
+  connection.on("error", function (error) {
+    console.log("Connection Error: " + error.toString());
+  });
+}
+function ircMessageHandler (message) {
+ connection.on("message", function(message) {
+    if (message.type === 'utf8') {
+      if (message.utf8Data.startsWith('PING :tmi.twitch.tv')) {
+        connection.sendUTF('PONG :tmi.twitch.tv');
+        console.log("PONG SENT");
+      } 
+    }
+ });
+  function moveCommandAction() {
+    connection.sendUTF(`PRIVMSG #${channel} :${moveMessage}`);
+  }
+  let intervalObj = setInterval(moveCommandAction, moveInterval);
+  commandManager.addCommand("ping", (message) => {
+    console.log("PING COMMAND", message);
+    connection.sendUTF(`PRIVMSG ${message.command.channel} : pong`);
+  });
+  commandManager.addCommand("move", (message) => {
+    console.log("THE MESSAGE", message);
+    if (!isSentByStreamer(message)) return;
+    let updateInterval = message.command.botCommandParams
+      ? parseInt(message.command.botCommandParams) * 1000 * 60
+      : defaultMoveInterval;
+
+    if (moveInterval === updateInterval) return;
+    if (updateInterval < 60000 || updateInterval > 3600000) return;
+    moveInterval = updateInterval;
+    console.log("THIS IS THE MOVEINTERVAL", moveInterval);
+
+    clearInterval(intervalObj);
+    intervalObj = null;
+    intervalObj = setInterval(moveCommandAction, moveInterval);
+  });
+
+  connection.on("message", commandManager.onMessage.bind(commandManager)); ///the a new function of onMessage with the commandManager as the execution context
+
+  commandManager.addCommand("moveoff", (message) => {
+    if (!isSentByStreamer(message)) return;
+    clearInterval(intervalObj);
+  });
+
+  commandManager.addCommand("close", (message) => {
+    if (!isSentByStreamer(message)) return;
+    connection.sendUTF(`PART ${channel}`);
+    connection.close();
+  });
+
+   commandManager.addCommand("github", (message) => {
+    connection.sendUTF(
+      `PRIVMSG ${commandManager.parsedMessage.command.channel} : Nhan's github: https://github.com/nonbots`
+    );
+  });
+
+ commandManager.addCommand("discord", (message) => {
+    connection.sendUTF(
+      `PRIVMSG ${commandManager.parsedMessage.command.channel} : discord community: https://discord.gg/ku8vVEmuJY`
+    );
+  });
+
+  commandManager.addCommand("youtube", (message) => {
+    connection.sendUTF(
+      `PRIVMSG ${commandManager.parsedMessage.command.channel} : cooking channel: www.youtube.com/@nhancooks`
+    );
+  });
+}
+
+function ircCloseHandler(connection) {
+  connection.on("close", function () {
+    console.log("Connection Closed");
+    console.log(`close description: ${connection.closeDescription}`);
+    console.log(`close reason code: ${connection.closeReasonCode}`);
+  });
+}
+/**
+ * @param {websocket.connection} connection
+ * @returns void 
+ * add listeners to the ircClient connection
+ */
+function ircConnectionHandler (connection) {
+  console.log("WebSocket Client Connected");
+  connection.sendUTF(`PASS ${IRC_TOKEN}`);
+  connection.sendUTF(`NICK ${account}`);
+  connection.sendUTF(`JOIN #${channel}`);
+  connection.on("error", ircErrorHandler);
+  connection.on("message", ircMessageHandler);
+}
+
+ircClient.on("connect", ircConnectionHandler);
+ircClient.connect("ws://irc-ws.chat.twitch.tv:80");
