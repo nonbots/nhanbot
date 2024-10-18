@@ -23,7 +23,7 @@ export class CommandManager {
       let messages = rawIrcMessage.split("\r\n"); // The IRC message may contain one or more messages.
       messages.forEach((message) => {
         this.parsedMessage = parseMessage(message);
-
+        console.log("PARSED MESSAGE", this.parsedMessage);
         if (this.parsedMessage) {
 
           // console.log(`Message command: ${parsedMessage.command.command}`);

@@ -16,6 +16,7 @@ const {
   TWITCH_ACCOUNT: account,
   CLIENT_ID: ircClient_id,
   CLIENT_SECRET: ircClient_secret,
+  NHANIFY_API_KEY,
   BOT_ID,
   BROADCASTER_ID,
 } = authInfo;
@@ -44,14 +45,11 @@ eventSubClient.on("connect", function (connection) {
                 console.log(`close description: ${connection.closeDescription}`);
                 let responseData = await createFollowSubscription(data.payload.session.id);
               if (responseData.message === 'Invalid OAuth token') {
-                  console.log("INVALID");
                   const data = await createNewAuthToken();
-                  console.log({data});
                   const newToken = data.access_token;
                   const newRefresh = data.refresh_token;
                   authInfo.TWITCH_TOKEN = newToken;
                   authInfo.REFRESH_TWITCH_TOKEN = newRefresh;
-                  console.log(authInfo);
                   writeFileSync("./src/auth.json", JSON.stringify(authInfo));
                   //IRC_connection.close();
                   //connection.close();
@@ -107,6 +105,53 @@ ircClient.on("connect", function (connection) {
     const result = await response.json();
     connection.sendUTF(`PRIVMSG ${message.command.channel} : ${result.playlists.length} public playlists`)
   })
+  commandManager.addCommand("sr", async(message) => {
+    try {
+      const url = message.command.botCommandParams;
+      const playlistId = 6;
+      const addedBy = message.source.nick;
+      let payload = {
+        url,
+        playlistId,
+        addedBy,
+      }
+      const response = await fetch("http://localhost:3002/api/playlist/addSong", {
+          method: 'POST',
+          headers: {
+              'Authorization': `Bearer ${NHANIFY_API_KEY}`,
+              'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(payload)
+      });
+    const result = await response.json();
+    switch(result.msg) {
+      case 'success':
+        connection.sendUTF(`PRIVMSG ${message.command.channel} : @${addedBy}, ${result.song.title} was added to "Twitch Stream" playlist.`);
+        break;
+      case 'no_user_account':
+        connection.sendUTF(`PRIVMSG ${message.command.channel} : @${addedBy}, Create an account at https://wwww.nhanify.com.`);
+        break;
+      case 'playlist_max_limit':
+        connection.sendUTF(`PRIVMSG ${message.command.channel} : @${addedBy}, The playlist has has reached it's max number of songs.`);
+        break;
+      case 'duplicate_video_id':
+        connection.sendUTF(`PRIVMSG ${message.command.channel} : @${addedBy}, This song has already been added to the playlist.`);
+        break;
+      case 'invalid_url':
+        connection.sendUTF(`PRIVMSG ${message.command.channel} : @${addedBy}, This url is invalid.`);
+        break;
+      case 'invalid_video_id':
+        connection.sendUTF(`PRIVMSG ${message.command.channel} : @${addedBy}, This video id is invalid.`);
+        break;
+      default:
+        connection.sendUTF(`PRIVMSG ${message.command.channel} : @${addedBy}, Oops! Something went wrong.`);
+    }
+    } catch(error) {
+      console.error(error);
+      connection.sendUTF(`PRIVMSG ${message.command.channel} : Oops! Nhanify is not available.`);
+    }
+  });
+
   commandManager.addCommand("ping", (message) => {
     console.log("PING COMMAND", message);
     connection.sendUTF(`PRIVMSG ${message.command.channel} : pong`);
@@ -145,6 +190,7 @@ ircClient.on("connect", function (connection) {
     });
 
   });
+
   commandManager.addCommand("moveoff", (message) => {
     if (!isSentByStreamer(message)) return;
     clearInterval(intervalObj);
@@ -156,7 +202,7 @@ ircClient.on("connect", function (connection) {
     connection.close();
   });
 
-   commandManager.addCommand("github", (message) => {
+  commandManager.addCommand("github", (message) => {
     connection.sendUTF(
       `PRIVMSG ${commandManager.parsedMessage.command.channel} : Nhan's github: https://github.com/nonbots`
     );
