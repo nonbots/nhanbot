@@ -1,0 +1,15 @@
+body {
+  display: flex;
+  flex-direction: column;
+  row-gap: .5rem;
+}
+p {
+  margin: 0;
+}
+.valTitle {
+  color: grey;
+  padding: .5rem;
+  background-color: #004daa;
+  color: white;
+  border-radius: .5rem;
+}

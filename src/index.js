@@ -8,6 +8,10 @@ import {
 import {writeFileSync } from 'node:fs';
 import websocket from "websocket";
 import http from 'http';
+import express from 'express';
+const app = express()
+const port = 3000
+app.use(express.static('public'));
 const { client: WebSocketClient, server: WebSocketServer } = websocket;
 import { CommandManager } from "./commandManager.js";
 import { createNewAuthToken, createFollowSubscription } from './accessToken.js';
@@ -18,6 +22,7 @@ const server = http.createServer((req, res) => {
   res.writeHead(404);
   res.end();
 });
+
 server.listen(8080, () => {
   console.log("Websocket server is listening on ws://localhost:8080");
 });
@@ -43,26 +48,41 @@ const {
 
 const IRC_TOKEN = `oauth:${password}`
 const songQueue = [];
-const COOLDOWN_DURATION = 60 * 1000;
-let lastSongRequestTime = new Date();
+const COOLDOWN_DURATION = 30 * 1000;
+let lastSongRequestTime = new Date() - COOLDOWN_DURATION;
 let IRC_connection;
 const moveMessage = "Get up and move, your body will thank you!";
-const defaultMoveInterval = 60000 * 60 * 1; // Set to 1 minute for testing.
+const defaultMoveInterval = 60000 * 60 * 1; 
 let moveInterval = defaultMoveInterval;
 
+let clientNhanify;
+const clientsOverlay = [];
 nhanbotServer.on('request', (request) => {
   const connection = request.accept(null, request.origin);
+  const whoami = request.resourceURL.search;
+  if (whoami === "?whoami=overlay") {
+    clientsOverlay.push(connection);
+  } else {
+    if(clientNhanify) clientNhanify.close();
+    clientNhanify = connection;
+  }
   connection.on('message', (message) => {
     if (message.type === 'utf8') {
       const data = JSON.parse(message.utf8Data);
-      console.log({data});
+      clientsOverlay.forEach(client => {
+        client.sendUTF(JSON.stringify(songQueue));
+      });
+
+      
       if ((data.type === "playerStateEnded" || data.type === "playerStateStarted") && songQueue.length !== 0) {
-        console.log({songQueue});
         const song = songQueue.shift();
-        connection.sendUTF(JSON.stringify(song));
+        clientsOverlay.forEach(client => {
+          client.sendUTF(JSON.stringify(songQueue));
+        });
         IRC_connection.sendUTF(`PRIVMSG #${channel} : @${song.addedBy}, ${song.title} is now playing.`);
+        clientNhanify.sendUTF(JSON.stringify(song));
       } else {
-        connection.sendUTF(JSON.stringify(null));
+        clientNhanify.sendUTF(JSON.stringify(null));
       }
     }
   });
@@ -183,12 +203,21 @@ ircClient.on("connect", function (connection) {
       connection.sendUTF(`PRIVMSG ${message.command.channel} : @${addedBy}, This video id is invalid.`);
       return;
     }
+
+    if (vidInfo.durationSecs > 600){
+      connection.sendUTF(`PRIVMSG ${message.command.channel} : @${addedBy}, ${vidInfo.title} is over the 10 minutes duration limit.`);
+      return;
+    }
     lastSongRequestTime = new Date();
     songQueue.push({
       title: vidInfo.title,
       videoId: vidInfo.videoId,
       duration: durationSecsToHHMMSS(vidInfo.durationSecs),
       addedBy,
+    });
+     
+    clientsOverlay.forEach(client => {
+      client.sendUTF(JSON.stringify(songQueue));
     });
     console.log({songQueue});
     connection.sendUTF(`PRIVMSG ${message.command.channel} : @${addedBy}, ${vidInfo.title} was added to the queue.`);
@@ -285,6 +314,8 @@ ircClient.on("connect", function (connection) {
 
 });
 
-
+app.listen(port, () => {
+  console.log(`Example app listening on port ${port}`)
+})
 ircClient.connect("ws://irc-ws.chat.twitch.tv:80");
 eventSubClient.connect("wss://eventsub.wss.twitch.tv/ws");
