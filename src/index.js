@@ -47,9 +47,6 @@ const {
 } = authInfo;
 
 const IRC_TOKEN = `oauth:${password}`
-const songQueue = [];
-const COOLDOWN_DURATION = 30 * 1000;
-let lastSongRequestTime = new Date() - COOLDOWN_DURATION;
 let IRC_connection;
 const moveMessage = "Get up and move, your body will thank you!";
 const defaultMoveInterval = 60000 * 60 * 1; 
@@ -57,31 +54,33 @@ let moveInterval = defaultMoveInterval;
 
 let clientNhanify;
 const clientsOverlay = [];
+const songQueue = [];
+const COOLDOWN_DURATION = 30 * 1000;
+let lastSongRequestTime = new Date() - COOLDOWN_DURATION;
+let song = null;
 nhanbotServer.on('request', (request) => {
   const connection = request.accept(null, request.origin);
   const whoami = request.resourceURL.search;
   if (whoami === "?whoami=overlay") {
     clientsOverlay.push(connection);
   } else {
-    if(clientNhanify) clientNhanify.close();
+    if (clientNhanify) clientNhanify.close();
     clientNhanify = connection;
   }
+  clientsOverlay.forEach(client => client.sendUTF(JSON.stringify({songQueue, song})));
   connection.on('message', (message) => {
     if (message.type === 'utf8') {
       const data = JSON.parse(message.utf8Data);
-      clientsOverlay.forEach(client => {
-        client.sendUTF(JSON.stringify(songQueue));
-      });
-
-      
-      if ((data.type === "playerStateEnded" || data.type === "playerStateStarted") && songQueue.length !== 0) {
-        const song = songQueue.shift();
-        clientsOverlay.forEach(client => {
-          client.sendUTF(JSON.stringify(songQueue));
-        });
+      if ((data.type === "playerStateEnded"|| data.type === "playerStateStarted") && songQueue.length !== 0) {
+        song = songQueue.shift();
+        clientsOverlay.forEach(client => client.sendUTF(JSON.stringify({songQueue, song})));
         IRC_connection.sendUTF(`PRIVMSG #${channel} : @${song.addedBy}, ${song.title} is now playing.`);
         clientNhanify.sendUTF(JSON.stringify(song));
-      } else {
+      } else if (data.type === "playerStateEnded"  && songQueue.length === 0 && song){
+        clientsOverlay.forEach(client => client.sendUTF(JSON.stringify({state: "end_queue"})));
+        clientNhanify.sendUTF(JSON.stringify(null));
+        song = null;
+      }else {
         clientNhanify.sendUTF(JSON.stringify(null));
       }
     }
@@ -216,10 +215,8 @@ ircClient.on("connect", function (connection) {
       addedBy,
     });
      
-    clientsOverlay.forEach(client => {
-      client.sendUTF(JSON.stringify(songQueue));
-    });
-    console.log({songQueue});
+    clientsOverlay.forEach(client => client.sendUTF(JSON.stringify({songQueue, song})));
+    console.log({songQueue, song});
     connection.sendUTF(`PRIVMSG ${message.command.channel} : @${addedBy}, ${vidInfo.title} was added to the queue.`);
     /*switch(result.msg) {
       case 'success':
