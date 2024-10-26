@@ -21,12 +21,16 @@ socket.onmessage = function (event) {
       curSongCard.innerHTML = '';
       curSongCard.setAttribute("style", "padding:0rem");
     }
+    if (state === "add_song") {
+      const cooldown = document.createElement('div');
+      cooldown.setAttribute("id", "cooldown");
+    }
     curSongCard.innerHTML = '';
     if (song) {
       curSongCard.appendChild(curSongImg);
       curSongCard.setAttribute("style", "padding:.5rem");
-      addSongCard(song, "songCard", curSongCard);
-      document.querySelector('.curSongCard .songCard p').textContent = song.title;
+      addSongCard(song, "curSongCardDisc", curSongCard);
+      document.querySelector('.curSongCard .curSongCardDisc p').textContent = song.title;
     }
     songsDiv.innerHTML = '';
     if (songQueue) songQueue.forEach(song => addSongCard(song, "songCard", songsDiv));
