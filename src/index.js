@@ -166,6 +166,14 @@ ircClient.on("connect", function (connection) {
     const result = await response.json();
     connection.sendUTF(`PRIVMSG ${message.command.channel} : ${result.playlists.length} public playlists`)
   })
+  commandManager.addCommand("song", async(message) => {
+    const addedBy = message.source.nick;
+    if (!song) {
+        connection.sendUTF(`PRIVMSG ${message.command.channel} : @${addedBy}, no song currently playing in the queue.`);
+    } else {
+    connection.sendUTF(`PRIVMSG ${message.command.channel} : @${addedBy}, ${song.title} is currently playing. The video is at https://www.youtube.com/watch?v=${song.videoId}`);
+    }
+  });
   commandManager.addCommand("sr", async(message) => {
   //  try {
       const addedBy = message.source.nick;

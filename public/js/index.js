@@ -26,6 +26,7 @@ socket.onmessage = function (event) {
       const text = document.getElementById("titleDisc");
       let counter = 30;
       const counterP = document.getElementById("counter");
+      counterP.style.visibility = "visible";
       console.log({counter});
       const countInterval = setInterval(() => {
         counter--;
