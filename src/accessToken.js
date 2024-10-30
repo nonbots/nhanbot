@@ -1,4 +1,3 @@
-import {writeFileSync } from 'node:fs';
 import authInfo from "./auth.json" assert { type: 'json' };
 const {TWITCH_TOKEN, BOT_ID, BROADCASTER_ID, CLIENT_ID, CLIENT_SECRET, REFRESH_TWITCH_TOKEN} = authInfo;
 
