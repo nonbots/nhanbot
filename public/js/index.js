@@ -22,13 +22,16 @@ socket.onmessage = function (event) {
     console.log({state});
     switch (state) {
       case "end_queue": 
-        endChatQueueHandler(curSongCard, songsDiv);
+        endChatQueueHandler(song, nhanifySongQueue, songsDiv);
         break;
       case "add_song": 
         addSongHandler(chatSongQueue);
         break;
       case "play_song": 
         playSongHandler(chatSongQueue, song, curSongCard, songsDiv);
+        break;
+      case "nhanify_cur_song_play": 
+        playSongHandler(nhanifySongQueue, song, curSongCard, songsDiv);
         break;
     }
   } catch (error) {

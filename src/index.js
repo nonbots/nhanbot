@@ -63,14 +63,20 @@ nhanbotServer.on('request', (request) => {
         IRC_connection.sendUTF(`PRIVMSG #${authInfo.TWITCH_CHANNEL} : @${song.addedBy}, ${song.title} is now playing.`);
         clientNhanify.sendUTF(JSON.stringify({type: "chat", data: song}));
       } else if (data.type === "playerStateEnded"  && chatSongQueue.length === 0 && song){
-        clientsOverlay.forEach(client => client.sendUTF(JSON.stringify({state: "end_queue"})));
+        console.log("NHANIFY IDX LAST SONG ENDED", data.nhanifyIdx + 1);
+        const nhanifySong = nhanifySongQueue[data.nhanifyIdx + 1];
+        const updatedQueue = nhanifySongQueue.slice(data.nhanifyIdx + 2);
+        clientsOverlay.forEach(client => client.sendUTF(JSON.stringify({state: "end_queue", song: nhanifySong, nhanifySongQueue: updatedQueue})));
         clientNhanify.sendUTF(JSON.stringify({type: "chat", data: null}));
         song = null;
       } else if (data.type === "playerStateStarted") {
         console.log({nhanifySongQueue});
         clientNhanify.sendUTF(JSON.stringify({type: "nhanify", data: nhanifySongQueue}));
       }else {
+        const nhanifySong = nhanifySongQueue[data.nhanifyIdx + 1];
+        const updatedQueue = nhanifySongQueue.slice(data.nhanifyIdx + 2);
         clientNhanify.sendUTF(JSON.stringify({type: "chat", data: null}));
+        clientsOverlay.forEach(client => client.sendUTF(JSON.stringify({state: "nhanify_cur_song_play", song: nhanifySong, nhanifySongQueue: updatedQueue})));
       }
     }
   });

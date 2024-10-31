@@ -1,8 +1,9 @@
-function endChatQueueHandler(curSongCard, songsDiv) {
+function endChatQueueHandler(song, songQueue, songsDiv) {
   console.log("IN END_QUEUE", {songsDiv});
-  curSongCard.innerHTML = '';
-  curSongCard.setAttribute("style", "padding:0rem");
-  nhanifyQueue.forEach(song => addSongCard(song, "songCard", songsDiv));
+//  curSongCard.innerHTML = '';
+ // curSongCard.setAttribute("style", "padding:0rem");
+  document.querySelector('.curSongCard .curSongCardDisc p').textContent = song.title;
+  songQueue.forEach(song => addSongCard(song, "songCard", songsDiv));
 }
  function addSongHandler(chatSongQueue) {
   //console.log({state});
