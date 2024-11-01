@@ -27,16 +27,15 @@ const nhanbotServer = new WebSocketServer({
 const moveMessage = "Get up and move, your body will thank you!";
 const defaultMoveInterval = 60000 * 60 * 1; 
 const clientsOverlay = [];
-const chatSongQueue = [];
+const chatQueue = [];
 const nhanifyPlaylistId = 607;// Afro & Indigenous Lyrics
-let nhanifySongQueue = await getNhanifyPlaylist(nhanifyPlaylistId);
+let nhanifyQueue = await getNhanifyPlaylist(nhanifyPlaylistId);
 const COOLDOWN_DURATION = 30 * 1000;
 let IRC_connection;
 let moveInterval = defaultMoveInterval;
-let clientNhanify;
 let lastSongRequestTime = new Date() - COOLDOWN_DURATION;
 let song = null;
-
+let isSong = false;
 app.use(express.static('public'));
 server.listen(authInfo.SOCKET_PORT, () => {
   console.log(`Websocket server is listening on ws://localhost:${authInfo.SOCKET_PORT}`);
@@ -46,58 +45,50 @@ nhanbotServer.on('request', (request) => {
   const connection = request.accept(null, request.origin);
   const whoami = request.resourceURL.search;
   if (whoami === "?whoami=overlay") {
-    connection.sendUTF(JSON.stringify({nhanifySongQueue, chatSongQueue, song, state:"queue_on_load"}));
+    connection.sendUTF(JSON.stringify({queueLength: nhanifyQueue.songs.length, queueTitle: nhanifyQueue.title, queueCreatorId: nhanifyQueue.creatorId, state:"queue_on_load"}));
     clientsOverlay.push(connection);
-  } else {
-    if (clientNhanify) clientNhanify.close();
-    clientNhanify = connection;
-  }
+  } 
 
   connection.on('message', async (message) => {
     if (message.type !== 'utf8') return;
     const data = JSON.parse(message.utf8Data);
-    
+    console.log({data});
     // when there are songs on the chat queue and the previous has ended or the player has just started
-    const isNotEmptyQueueOnSongChange = (data.type === "playerStateEnded"|| data.type === "playerStateStarted") && chatSongQueue.length !== 0;
+    const isNotEmptyQueueOnSongChange = (data.type === "playerStateEnded"|| data.type === "playerStateStarted") && chatQueue.length !== 0;
     if (isNotEmptyQueueOnSongChange) {
-      song = chatSongQueue.shift();
-      clientsOverlay.forEach(client => client.sendUTF(JSON.stringify({chatSongQueue, song, state:"play_song"})));
+      song = chatQueue.shift();
+      isSong = (song);
+      clientsOverlay.forEach(client => client.sendUTF(JSON.stringify({chatQueue, song, state:"play_song"})));
       IRC_connection.sendUTF(`PRIVMSG #${authInfo.TWITCH_CHANNEL} : @${song.addedBy}, ${song.title} is now playing.`);
-      clientNhanify.sendUTF(JSON.stringify({type: "chat", data: song}));
       return;
     }
 
     // when there are no songs on the chat queue and the last song is done playing
-    const isChatQueueDone = data.type === "playerStateEnded"  && chatSongQueue.length === 0 && song;
+    const isChatQueueDone = data.type === "playerStateEnded"  && chatQueue.length === 0 && isSong;
     if (isChatQueueDone) {
-      const nhanifySong = nhanifySongQueue[data.nhanifyIdx + 1];
-      const updatedQueue = nhanifySongQueue.slice(data.nhanifyIdx + 2);
-      clientsOverlay.forEach(client => client.sendUTF(JSON.stringify({state: "end_queue", song: nhanifySong, nhanifySongQueue: updatedQueue})));
-      clientNhanify.sendUTF(JSON.stringify({type: "chat", data: null}));
-      song = null;
-      return;
-    }
-    
-    // when nhanify is loaded
-    if (data.type === "playerStateStarted") {
-      clientNhanify.sendUTF(JSON.stringify({type: "nhanify", data: nhanifySongQueue}));
+      const nhanifySong = nhanifyQueue.songs[data.nhanifyIdx + 1];
+      song = nhanifySong;
+      const updatedQueue = nhanifyQueue.songs.slice(data.nhanifyIdx + 2);
+      clientsOverlay.forEach(client => client.sendUTF(JSON.stringify({type: "chat", data: null, state: "end_queue", song: nhanifySong, nhanifyQueue: updatedQueue})));
+      isSong = false;
       return;
     }
     
     // when there are no songs in the chat queue
-    const nhanifySong = nhanifySongQueue[data.nhanifyIdx + 1];
-    const updatedQueue = nhanifySongQueue.slice(data.nhanifyIdx + 2);
-    clientNhanify.sendUTF(JSON.stringify({type: "chat", data: null}));
-    clientsOverlay.forEach(client => client.sendUTF(JSON.stringify({state: "nhanify_cur_song_play", song: nhanifySong, nhanifySongQueue: updatedQueue})));
+    const nhanifySong = nhanifyQueue.songs[data.nhanifyIdx + 1];
+    song = nhanifySong;
+    const updatedQueue = nhanifyQueue.songs.slice(data.nhanifyIdx + 2);
+    clientsOverlay.forEach(client => client.sendUTF(JSON.stringify({type: "chat", data: null, state: "nhanify_cur_song_play", song: nhanifySong, nhanifyQueue: updatedQueue})));
   });
 });
 
 async function getNhanifyPlaylist(playlistId) {
   const response = await fetch(`https://www.nhanify.com/api/playlists/${playlistId}`);
   const playlist = await response.json();
-  return playlist.songs.map(song => {
+  const songs = playlist.songs.map(song => {
     return {title:song.title, videoId:song.videoId};
   });
+  return {title: playlist.title, creatorId: playlist.title, songs};
 }
 
 eventSubClient.on("close", (code, description) => {
@@ -233,15 +224,15 @@ ircClient.on("connect", function (connection) {
       return;
     }
     lastSongRequestTime = new Date();
-    chatSongQueue.push({
+    chatQueue.push({
       title: vidInfo.title,
       videoId: vidInfo.videoId,
       duration: durationSecsToHHMMSS(vidInfo.durationSecs),
       addedBy,
     });
      
-    clientsOverlay.forEach(client => client.sendUTF(JSON.stringify({chatSongQueue, song, state:"add_song"})));
-    console.log({chatSongQueue, song});
+    clientsOverlay.forEach(client => client.sendUTF(JSON.stringify({chatQueue, song, state:"add_song"})));
+    console.log({chatQueue, song});
     connection.sendUTF(`PRIVMSG ${message.command.channel} : @${addedBy}, ${vidInfo.title} was added to the queue.`);
     /*switch(result.msg) {
       case 'success':
