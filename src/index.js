@@ -1,4 +1,4 @@
-import authInfo from "./auth.json" assert { type: 'json' }; // eslint-disable-line
+import authInfo from "./auth.json" with { type: 'json' }; // eslint-disable-line
 import {writeFileSync } from 'node:fs';
 import websocket from "websocket";
 import http from 'http';
@@ -30,6 +30,9 @@ const clientsOverlay = [];
 const chatQueue = [];
 const nhanifyPlaylistId = 607;// Afro & Indigenous Lyrics
 let nhanifyQueue = await getNhanifyPlaylist(nhanifyPlaylistId);
+console.log({nhanifyQueue});
+let creatorName = await getCreatorName(nhanifyQueue.creatorId);
+console.log({creatorName});
 const COOLDOWN_DURATION = 30 * 1000;
 let IRC_connection;
 let moveInterval = defaultMoveInterval;
@@ -45,7 +48,7 @@ nhanbotServer.on('request', (request) => {
   const connection = request.accept(null, request.origin);
   const whoami = request.resourceURL.search;
   if (whoami === "?whoami=overlay") {
-    connection.sendUTF(JSON.stringify({queueLength: nhanifyQueue.songs.length, queueTitle: nhanifyQueue.title, queueCreatorId: nhanifyQueue.creatorId, state:"queue_on_load"}));
+    connection.sendUTF(JSON.stringify({queueCreatorName: creatorName, queueLength: nhanifyQueue.songs.length, queueTitle: nhanifyQueue.title, state:"queue_on_load"}));
     clientsOverlay.push(connection);
   } 
 
@@ -88,7 +91,13 @@ async function getNhanifyPlaylist(playlistId) {
   const songs = playlist.songs.map(song => {
     return {title:song.title, videoId:song.videoId};
   });
-  return {title: playlist.title, creatorId: playlist.title, songs};
+  return {title: playlist.title, creatorId: playlist.creatorId, songs};
+}
+
+async function getCreatorName(creatorId) {
+  const response = await fetch(`https://www.nhanify.com/api/users/${creatorId}`);
+  const user = await response.json();
+  return user.username;
 }
 
 eventSubClient.on("close", (code, description) => {

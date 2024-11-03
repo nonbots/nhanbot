@@ -18,29 +18,34 @@ const songsDiv = document.getElementsByClassName('songsDiv')[0];
 const curSongCard = document.getElementsByClassName('curSongCard')[0];
 const curSongImg = document.createElement('img');
 let nhanifyQueueLength;
+let nhanifyQueueTitle;
+let nhanifyQueueCreatorName;
 curSongImg.setAttribute("src", "../img/play.png");
 curSongImg.setAttribute("alt", "Playing");
 socket.onmessage = function (event) {
   try {
-    console.log(event.data);
-    const {queueLength, nhanifyQueue, chatQueue, song, state} = JSON.parse(event.data);
+    console.log("HERE", event.data);
+    const {queueTitle, queueCreatorName, queueLength, nhanifyQueue, chatQueue, song, state} = JSON.parse(event.data);
     switch (state) {
       case "queue_on_load": 
         nhanifyQueueLength = queueLength;
+        nhanifyQueueTitle = queueTitle;
+        nhanifyQueueCreatorName = queueCreatorName;
         break;
       case "end_queue": 
-        endChatQueueHandler(song, nhanifyQueue, songsDiv);
+        endChatQueueHandler("Nhanify Queue",song, nhanifyQueue, songsDiv, nhanifyQueueCreatorName, nhanifyQueueTitle);
         playNhanifySong(song);
         break;
       case "add_song": 
         addSongHandler(chatQueue);
         break;
       case "play_song": // play song from chat 
-        playSongHandler(chatQueue, song, curSongCard, songsDiv);
+        playSongHandler("Chat Queue", chatQueue, song, curSongCard, songsDiv);
         playChatSong(song);
         break;
       case "nhanify_cur_song_play": 
-        playSongHandler(nhanifyQueue, song, curSongCard, songsDiv);
+        console.log("IN CASE", {queueCreatorName, queueTitle});
+        playSongHandler("Nhanify Queue", nhanifyQueue, song, curSongCard, songsDiv, nhanifyQueueCreatorName, nhanifyQueueTitle);
         playNhanifySong(song);
         break;
     }

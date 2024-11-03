@@ -17,12 +17,28 @@ p {
 h1 {
   font-family: system-ui;
   color: white;
+  margin: 0rem;
 }
 body {
   display: flex;
   flex-direction: column;
   row-gap: .5rem;
   background-color: #174172;
+}
+
+#header {
+  display: flex;
+  flex-direction: column; 
+  justify-content: center;
+  align-items: center;
+}
+
+#nhanifyDis {
+  display: flex;
+  flex-direction: row; 
+  column-gap: 1rem;
+  width:100%;
+  justify-content: space-between;
 }
 
 .songsDiv {
@@ -65,15 +81,14 @@ body {
 .queueTitle {
   display: flex;
   flex-direction: row;
-  column-gap: 1rem;
-  justify-content: center;
-  align-items: center;
+  width:100%;
+  /*column-gap: 1rem;*/
+  justify-content: space-between;
 }
 
 #titleDisc {
   position: relative;
   z-index: 4; 
-  padding: .5rem;
 }
 
 .cooldown {

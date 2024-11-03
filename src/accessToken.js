@@ -1,4 +1,4 @@
-import authInfo from "./auth.json" assert { type: 'json' };
+import authInfo from "./auth.json" with { type: 'json' };
 const {TWITCH_TOKEN, BOT_ID, BROADCASTER_ID, CLIENT_ID, CLIENT_SECRET, REFRESH_TWITCH_TOKEN} = authInfo;
 
 export async function createNewAuthToken() {

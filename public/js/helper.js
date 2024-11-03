@@ -1,29 +1,33 @@
-function endChatQueueHandler(song, songQueue, songsDiv) {
+function endChatQueueHandler(queueType, song, songQueue, songsDiv, nhanifyQueueCreatorName, nhanifyQueueTitle) {
   console.log("IN END_QUEUE", {songsDiv});
-//  curSongCard.innerHTML = '';
- // curSongCard.setAttribute("style", "padding:0rem");
+  document.getElementById('queue').textContent = queueType;
+  document.getElementById('nhanifyDis').children[0].textContent = nhanifyQueueTitle;
+  document.getElementById('nhanifyDis').children[1].textContent = nhanifyQueueCreatorName;
   document.querySelector('.curSongCard .curSongCardDisc p').textContent = song.title;
+  songsDiv.innerHTML = '';
   songQueue.forEach(song => addSongCard(song, "songCard", songsDiv));
 }
  function addSongHandler(chatSongQueue) {
   //console.log({state});
   const cooldown = document.getElementsByClassName("cooldown")[0];
   const text = document.getElementById("titleDisc");
+  text.style.visibility = 'hidden';
   let counter = 30;
-  const counterP = document.getElementById("counter");
-  counterP.style.visibility = "visible";
+  const counterP = document.createElement('p');
+  document.getElementsByClassName('queueTitle')[0].appendChild(counterP); 
+  //counterP.textContent = counter;
   console.log({counter});
   const countInterval = setInterval(() => {
     counter--;
     counterP.textContent = counter;
     if (counter <= 0) {
-      text.style.visibility = "visible";
-      counterP.style.visibility = "hidden";
+      text.style.visibility = 'visible';
+      counterP.remove();
       clearInterval(countInterval);
     }
   }, 1000);
   console.log({text});
-  text.style.visibility = 'hidden';
+  //text.style.visibility = 'hidden';
   cooldown.style.animation = 'none';
   cooldown.offsetWidth;
   cooldown.style.backgroundColor = 'red';
@@ -31,14 +35,22 @@ function endChatQueueHandler(song, songQueue, songsDiv) {
   songsDiv.innerHTML = '';
   if (chatSongQueue) chatSongQueue.forEach(song => addSongCard(song, "songCard", songsDiv));
 }
- function playSongHandler(chatSongQueue, song, curSongCard, songsDiv) {
+ function playSongHandler(queueType, queue, song, curSongCard, songsDiv, queueCreatorName, queueTitle) {
   curSongCard.innerHTML = '';
   if (song) {
+    document.getElementById('queue').textContent = queueType;
+    if (queueType === "Nhanify Queue") {
+      document.getElementById('nhanifyDis').children[0].textContent = queueTitle;
+      document.getElementById('nhanifyDis').children[1].textContent = queueCreatorName;
+    } else {
+    document.getElementById('nhanifyDis').children[0].textContent = '';
+    document.getElementById('nhanifyDis').children[1].textContent = '';
+    }
     curSongCard.appendChild(curSongImg);
     curSongCard.setAttribute("style", "padding:.5rem");
     addSongCard(song, "curSongCardDisc", curSongCard);
     document.querySelector('.curSongCard .curSongCardDisc p').textContent = song.title;
   }
   songsDiv.innerHTML = '';
-  if (chatSongQueue) chatSongQueue.forEach(song => addSongCard(song, "songCard", songsDiv));
+  if (queue) queue.forEach(song => addSongCard(song, "songCard", songsDiv));
 }
