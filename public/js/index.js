@@ -3,7 +3,6 @@ tag.src = "https://www.youtube.com/iframe_api";
 var firstScriptTag = document.getElementsByTagName("script")[0];
 firstScriptTag.parentNode.insertBefore(tag, firstScriptTag);
 var player;
-let nhanifyIdx = 0;
 const socket = new WebSocket("ws://localhost:8080/?whoami=overlay");
 socket.onopen = function (_event) {
   console.log("WebSocket connection opened.");
@@ -44,7 +43,6 @@ socket.onmessage = function (event) {
         playChatSong(song);
         break;
       case "nhanify_cur_song_play": 
-        console.log("IN CASE", {queueCreatorName, queueTitle});
         playSongHandler("Nhanify Queue", nhanifyQueue, song, curSongCard, songsDiv, nhanifyQueueCreatorName, nhanifyQueueTitle);
         playNhanifySong(song);
         break;
@@ -53,6 +51,7 @@ socket.onmessage = function (event) {
     console.error(error);
   }
 };
+
 function e(tag, attributes = {}, ...children) {
   const element = document.createElement(tag);
   Object.keys(attributes).forEach(key => element.setAttribute(key, attributes[key]));
@@ -68,7 +67,6 @@ function e(tag, attributes = {}, ...children) {
 
 function addSongCard(song, className, parent) {
   const card = e("div", { class: className }, e("p", {}, song.title));
-  console.log("CARD");
   parent.appendChild(card);
 }
 
@@ -94,13 +92,12 @@ function onYouTubeIframeAPIReady() {
 
 function onPlayerReady(event) {
     //  event.target.playVideo();
-    nhanifyIdx -= 1;
-    socket.send(JSON.stringify({ type: "playerStateStarted", nhanifyIdx}));
+    socket.send(JSON.stringify({ type: "playerStateStarted"}));
   }
 
 function onPlayerStateChange(event) {
  if (event.data == YT.PlayerState.ENDED) {
-    socket.send(JSON.stringify({ type: "playerStateEnded" , nhanifyIdx}));
+    socket.send(JSON.stringify({ type: "playerStateEnded"}));
   }
 }
 
@@ -109,10 +106,5 @@ function playChatSong(song) {
 }
 
 function playNhanifySong(song) {
-  nhanifyIdx += 1;
-  console.log(`nhanify song idx ${nhanifyIdx + 1} === ${nhanifyQueueLength}`);
   player.loadVideoById(song.videoId);
-  if (nhanifyIdx + 1 === nhanifyQueueLength) {
-    nhanifyIdx = -1;
-  }
 }
