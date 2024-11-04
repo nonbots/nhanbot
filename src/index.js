@@ -31,18 +31,13 @@ const chatQueue = [];
 const nhanifyPlaylists = await getNhanifyPublicPlaylists();
 const nhanifyPlaylistsLength = nhanifyPlaylists.length;
 let nhanifyPlaylistIdx = 0;
-console.log({nhanifyPlaylists});
-//const nhanifyPlaylistId = 607;// Afro & Indigenous Lyrics
 let nhanifyQueueIdx = 0;
-console.log("IN GLOBAL", {nhanifyQueueIdx});
-let nhanifyQueue = await getNhanifyPlaylist(nhanifyPlaylists[nhanifyPlaylistIdx].id);
-let nhanifyQueueLength = nhanifyQueue.songs.length;
-//let nhanifyQueue;
-//let nhanifyQueueLength;
-//let nhanifyQueueIdx;
-console.log({nhanifyQueue});
-//let creatorName = await getCreatorName(nhanifyQueue.creatorId);
-//console.log({creatorName});
+let nhanifyQueue;
+let nhanifyQueueLength;
+do {
+  nhanifyQueue = await getNhanifyPlaylist(nhanifyPlaylists[nhanifyPlaylistIdx].id);
+  nhanifyQueueLength = nhanifyQueue.songs.length;
+}while (nhanifyQueue.songs.length === 0); 
 const COOLDOWN_DURATION = 30 * 1000;
 let IRC_connection;
 let moveInterval = defaultMoveInterval;
@@ -50,9 +45,6 @@ let lastSongRequestTime = new Date() - COOLDOWN_DURATION;
 let song = null;
 let isSong = false;
 app.use(express.static('public'));
-server.listen(authInfo.SOCKET_PORT, () => {
-  console.log(`Websocket server is listening on ws://localhost:${authInfo.SOCKET_PORT}`);
-});
 
 async function getNhanifyPublicPlaylists() {
   const response = await fetch(`https://www.nhanify.com/api/playlists/public`);
@@ -63,10 +55,15 @@ async function getNhanifyPublicPlaylists() {
     }
     return accum;
   }, []);
-  playlists.sort((a,b) => a.songCount - b.songCount);
-  return playlists;
+  return shuffleArray(playlists);
 }
-
+function shuffleArray(arr) {
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]]; // Swap elements
+  }
+  return arr;
+}
 nhanbotServer.on('request', (request) => {
   const connection = request.accept(null, request.origin);
   const whoami = request.resourceURL.search;
@@ -78,12 +75,10 @@ nhanbotServer.on('request', (request) => {
   connection.on('message', async (message) => {
     if (message.type !== 'utf8') return;
     const data = JSON.parse(message.utf8Data);
-    console.log({data});
 
     // when there are songs on the chat queue and the previous has ended or the player has just started
     const isNotEmptyQueueOnSongChange = (data.type === "playerStateEnded"|| data.type === "playerStateStarted") && chatQueue.length !== 0;
     if (isNotEmptyQueueOnSongChange) {
-      console.log("PLAYED SONG IN QUEUE", {nhanifyQueueIdx,song});
       song = chatQueue.shift();
       isSong = (song);
       clientsOverlay.forEach(client => client.sendUTF(JSON.stringify({chatQueue, song, state:"play_song"})));
@@ -94,13 +89,11 @@ nhanbotServer.on('request', (request) => {
     // when there are no songs on the chat queue and the last song is done playing
     const isChatQueueDone = data.type === "playerStateEnded"  && chatQueue.length === 0 && isSong;
     if (isChatQueueDone) {
-      console.log("IN LAST SONG CHAT QUEUE PLAYED", {nhanifyQueueIdx,song});
       const nhanifySong = nhanifyQueue.songs[nhanifyQueueIdx];
       song = nhanifySong;
       const updatedQueue = nhanifyQueue.songs.slice(nhanifyQueueIdx + 1);
       nhanifyQueueIdx = (nhanifyQueueIdx === nhanifyQueueLength - 1) ? 0 : nhanifyQueueIdx += 1;
       if (nhanifyQueueIdx === 0) {
-        console.log("IN IF STATEMENT", {nhanifyQueueIdx,song});
         nhanifyQueue = await getNhanifyPlaylist(nhanifyPlaylists[nhanifyPlaylistIdx].id);
         nhanifyPlaylistIdx = (nhanifyPlaylistIdx === nhanifyPlaylistsLength - 1) ? 0 : nhanifyPlaylistIdx += 1;
       }
@@ -111,23 +104,20 @@ nhanbotServer.on('request', (request) => {
     
     // when there are no songs in the chat queue
     song = nhanifyQueue.songs[nhanifyQueueIdx];
-    console.log("IN CHAT QUEUE EMPTY", {nhanifyQueueIdx,song});
     const updatedQueue = nhanifyQueue.songs.slice(nhanifyQueueIdx + 1);
     clientsOverlay.forEach(client => client.sendUTF(JSON.stringify({type: "chat", data: null, state: "nhanify_cur_song_play", song , nhanifyQueue: updatedQueue})));
     nhanifyQueueIdx = (nhanifyQueueIdx === nhanifyQueueLength - 1) ? 0 : nhanifyQueueIdx += 1;
-    console.log("IN CHAT QUEUE EMPTY", {nhanifyQueueIdx});
     if (nhanifyQueueIdx === 0) {
-      nhanifyPlaylistIdx = (nhanifyPlaylistIdx === nhanifyPlaylistsLength - 1) ? 0 : nhanifyPlaylistIdx += 1;
-      nhanifyQueue = await getNhanifyPlaylist(nhanifyPlaylists[nhanifyPlaylistIdx].id);
-      while (nhanifyQueue.songs.length === 0) {
+      do {
         nhanifyPlaylistIdx = (nhanifyPlaylistIdx === nhanifyPlaylistsLength - 1) ? 0 : nhanifyPlaylistIdx += 1;
         nhanifyQueue = await getNhanifyPlaylist(nhanifyPlaylists[nhanifyPlaylistIdx].id);
-      }
+      }while (nhanifyQueue.songs.length === 0); 
       nhanifyQueueLength = nhanifyQueue.songs.length;
       connection.sendUTF(JSON.stringify({ queueLength: nhanifyPlaylists[nhanifyPlaylistIdx].songCount, queueCreatorName: nhanifyPlaylists[nhanifyPlaylistIdx].creator.username, queueTitle: nhanifyQueue.title, state:"queue_on_load"}));
     }
   });
 });
+
 
 async function getNhanifyPlaylist(playlistId) {
   const response = await fetch(`https://www.nhanify.com/api/playlists/${playlistId}`);
@@ -290,7 +280,6 @@ ircClient.on("connect", function (connection) {
     });
      
     clientsOverlay.forEach(client => client.sendUTF(JSON.stringify({chatQueue, song, state:"add_song"})));
-    console.log({chatQueue, song});
     connection.sendUTF(`PRIVMSG ${message.command.channel} : @${addedBy}, ${vidInfo.title} was added to the queue.`);
     /*switch(result.msg) {
       case 'success':
@@ -325,7 +314,6 @@ ircClient.on("connect", function (connection) {
     connection.sendUTF(`PRIVMSG #${authInfo.TWITCH_CHANNEL} :${moveMessage}`);
   }
   commandManager.addCommand("move", (message) => {
-    console.log("THE MESSAGE", message);
     if (!isSentByStreamer(message)) return;
     let updateInterval = message.command.botCommandParams
       ? parseInt(message.command.botCommandParams) * 1000 * 60
@@ -334,7 +322,6 @@ ircClient.on("connect", function (connection) {
     if (moveInterval === updateInterval) return;
     if (updateInterval < 60000 || updateInterval > 3600000) return;
     moveInterval = updateInterval;
-    console.log("THIS IS THE MOVEINTERVAL", moveInterval);
 
     clearInterval(intervalObj);
     intervalObj = null;
@@ -383,6 +370,9 @@ ircClient.on("connect", function (connection) {
 
 });
 
+server.listen(authInfo.SOCKET_PORT, () => {
+  console.log(`Websocket server is listening on ws://localhost:${authInfo.SOCKET_PORT}`);
+});
 app.listen(authInfo.WEB_SERVER_PORT, () => {
   console.log(`Example app listening on ${authInfo.WEB_SERVER_PORT} `);
 })

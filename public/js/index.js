@@ -23,7 +23,6 @@ curSongImg.setAttribute("src", "../img/play.png");
 curSongImg.setAttribute("alt", "Playing");
 socket.onmessage = function (event) {
   try {
-    console.log("HERE", event.data);
     const {queueTitle, queueCreatorName, queueLength, nhanifyQueue, chatQueue, song, state} = JSON.parse(event.data);
     switch (state) {
       case "queue_on_load": 
@@ -75,8 +74,6 @@ function onYouTubeIframeAPIReady() {
   player = new YT.Player("player", {
     height: "auto",
     width: "100%",
-    //height: '390',
-    //width: '640',
     playerVars: {
       playsinline: 1,
       enablejsapi: 1,
@@ -92,6 +89,7 @@ function onYouTubeIframeAPIReady() {
 
 function onPlayerReady(event) {
     //  event.target.playVideo();
+    console.log("PLAYER STARTED");
     socket.send(JSON.stringify({ type: "playerStateStarted"}));
   }
 
