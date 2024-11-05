@@ -376,5 +376,5 @@ server.listen(authInfo.SOCKET_PORT, () => {
 app.listen(authInfo.WEB_SERVER_PORT, () => {
   console.log(`Example app listening on ${authInfo.WEB_SERVER_PORT} `);
 })
-ircClient.connect("ws://irc-ws.chat.twitch.tv:80");
+ircClient.connect("wss://irc-ws.chat.twitch.tv:443");
 eventSubClient.connect("wss://eventsub.wss.twitch.tv/ws");

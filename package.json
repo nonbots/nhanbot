@@ -6,7 +6,7 @@
   "main": "src/index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "start": "node production/app.js",
+    "start": "node dist/src/index.js",
     "dev": "node .",
     "deploy": "rm -rf dist && rsync -av --progress app.js src public dist"
   },
