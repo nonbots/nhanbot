@@ -76,16 +76,22 @@ nhanbotServer.on('request', (request) => {
     if (message.type !== 'utf8') return;
     const data = JSON.parse(message.utf8Data);
 
+    if (data.type  === "paused_song") {
+      IRC_connection.sendUTF(`PRIVMSG #${authInfo.TWITCH_CHANNEL} : @${authInfo.TWITCH_CHANNEL}, music player has paused.`);
+      return;
+    }
+    
+    if (data.type  === "resumed_song") {
+      IRC_connection.sendUTF(`PRIVMSG #${authInfo.TWITCH_CHANNEL} : @${authInfo.TWITCH_CHANNEL}, music player has resumed.`);
+      return;
+    }
     // when there are songs on the chat queue and the previous has ended or the player has just started
     const isNotEmptyQueueOnSongChange = (data.type === "playerStateEnded"|| data.type === "playerStateStarted") && chatQueue.length !== 0;
     if (isNotEmptyQueueOnSongChange) {
-      song = chatQueue.shift();
-      isSong = (song);
-      clientsOverlay.forEach(client => client.sendUTF(JSON.stringify({chatQueue, song, state:"play_song"})));
-      IRC_connection.sendUTF(`PRIVMSG #${authInfo.TWITCH_CHANNEL} : @${song.addedBy}, ${song.title} is now playing.`);
+      playChatQueue();
       return;
     }
-
+    
     // when there are no songs on the chat queue and the last song is done playing
     const isChatQueueDone = data.type === "playerStateEnded"  && chatQueue.length === 0 && isSong;
     if (isChatQueueDone) {
@@ -103,21 +109,31 @@ nhanbotServer.on('request', (request) => {
     }
     
     // when there are no songs in the chat queue
-    song = nhanifyQueue.songs[nhanifyQueueIdx];
-    const updatedQueue = nhanifyQueue.songs.slice(nhanifyQueueIdx + 1);
-    clientsOverlay.forEach(client => client.sendUTF(JSON.stringify({type: "chat", data: null, state: "nhanify_cur_song_play", song , nhanifyQueue: updatedQueue})));
-    nhanifyQueueIdx = (nhanifyQueueIdx === nhanifyQueueLength - 1) ? 0 : nhanifyQueueIdx += 1;
-    if (nhanifyQueueIdx === 0) {
-      do {
-        nhanifyPlaylistIdx = (nhanifyPlaylistIdx === nhanifyPlaylistsLength - 1) ? 0 : nhanifyPlaylistIdx += 1;
-        nhanifyQueue = await getNhanifyPlaylist(nhanifyPlaylists[nhanifyPlaylistIdx].id);
-      }while (nhanifyQueue.songs.length === 0); 
-      nhanifyQueueLength = nhanifyQueue.songs.length;
-      connection.sendUTF(JSON.stringify({ queueLength: nhanifyPlaylists[nhanifyPlaylistIdx].songCount, queueCreatorName: nhanifyPlaylists[nhanifyPlaylistIdx].creator.username, queueTitle: nhanifyQueue.title, state:"queue_on_load"}));
-    }
+    await playNhanifyQueue();
   });
 });
 
+function playChatQueue() {
+  song = chatQueue.shift();
+  isSong = (song);
+  clientsOverlay.forEach(client => client.sendUTF(JSON.stringify({chatQueue, song, state:"play_song"})));
+  IRC_connection.sendUTF(`PRIVMSG #${authInfo.TWITCH_CHANNEL} : @${song.addedBy}, ${song.title} is now playing.`);
+}
+
+async function playNhanifyQueue() {
+  song = nhanifyQueue.songs[nhanifyQueueIdx];
+  const updatedQueue = nhanifyQueue.songs.slice(nhanifyQueueIdx + 1);
+  clientsOverlay.forEach(client => client.sendUTF(JSON.stringify({type: "chat", data: null, state: "nhanify_cur_song_play", song , nhanifyQueue: updatedQueue})));
+  nhanifyQueueIdx = (nhanifyQueueIdx === nhanifyQueueLength - 1) ? 0 : nhanifyQueueIdx += 1;
+  if (nhanifyQueueIdx === 0) {
+    do {
+      nhanifyPlaylistIdx = (nhanifyPlaylistIdx === nhanifyPlaylistsLength - 1) ? 0 : nhanifyPlaylistIdx += 1;
+      nhanifyQueue = await getNhanifyPlaylist(nhanifyPlaylists[nhanifyPlaylistIdx].id);
+    }while (nhanifyQueue.songs.length === 0); 
+    nhanifyQueueLength = nhanifyQueue.songs.length;
+    clientsOverlay.forEach(client => client.sendUTF(JSON.stringify({ queueLength: nhanifyPlaylists[nhanifyPlaylistIdx].songCount, queueCreatorName: nhanifyPlaylists[nhanifyPlaylistIdx].creator.username, queueTitle: nhanifyQueue.title, state:"queue_on_load"})));
+  }
+}
 
 async function getNhanifyPlaylist(playlistId) {
   const response = await fetch(`https://www.nhanify.com/api/playlists/${playlistId}`);
@@ -230,6 +246,27 @@ ircClient.on("connect", function (connection) {
     connection.sendUTF(`PRIVMSG ${message.command.channel} : @${addedBy}, ${song.title} is currently playing. The video is at https://www.youtube.com/watch?v=${song.videoId}`);
     }
   });
+
+  commandManager.addCommand("skipSong", async(message) => {
+    if (!isSentByStreamer(message)) return;
+    if (chatQueue.length === 0) {
+      nhanifyPlaylistIdx = (nhanifyPlaylistIdx === nhanifyPlaylistsLength - 1) ? 0 : nhanifyPlaylistIdx += 1;
+      await playNhanifyQueue();
+      return;
+    } 
+    playChatQueue();
+  });
+
+  commandManager.addCommand("pause", async(message) => {
+    if (!isSentByStreamer(message)) return;
+    clientsOverlay.forEach(client => client.sendUTF(JSON.stringify({state:"pause_song"})));
+  });
+
+  commandManager.addCommand("resume", async(message) => {
+    if (!isSentByStreamer(message)) return;
+    clientsOverlay.forEach(client => client.sendUTF(JSON.stringify({state:"resume_song"})));
+  });
+
   commandManager.addCommand("sr", async(message) => {
   //  try {
       const addedBy = message.source.nick;

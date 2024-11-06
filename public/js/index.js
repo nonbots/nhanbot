@@ -24,11 +24,20 @@ curSongImg.setAttribute("alt", "Playing");
 socket.onmessage = function (event) {
   try {
     const {queueTitle, queueCreatorName, queueLength, nhanifyQueue, chatQueue, song, state} = JSON.parse(event.data);
+    console.log({state});
     switch (state) {
       case "queue_on_load": 
         nhanifyQueueLength = queueLength;
         nhanifyQueueTitle = queueTitle;
         nhanifyQueueCreatorName = queueCreatorName;
+        break;
+      case "pause_song":
+        player.pauseVideo();
+        socket.send(JSON.stringify({ type: "paused_song"}));
+        break;
+      case "resume_song":
+        player.playVideo();
+        socket.send(JSON.stringify({ type: "resumed_song"}));
         break;
       case "end_queue": 
         endChatQueueHandler("Nhanify Queue",song, nhanifyQueue, songsDiv, nhanifyQueueCreatorName, nhanifyQueueTitle);
