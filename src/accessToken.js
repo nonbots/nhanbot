@@ -2,6 +2,7 @@ import authInfo from "./auth.json" with { type: 'json' };
 const {TWITCH_TOKEN, BOT_ID, BROADCASTER_ID, CLIENT_ID, CLIENT_SECRET, REFRESH_TWITCH_TOKEN} = authInfo;
 
 export async function createNewAuthToken() {
+  console.log({REFRESH_TWITCH_TOKEN});
   let payload = {
     "grant_type": "refresh_token",
     "refresh_token": REFRESH_TWITCH_TOKEN,
@@ -9,7 +10,8 @@ export async function createNewAuthToken() {
     "client_id": CLIENT_ID,
     "client_secret": CLIENT_SECRET
   }
- let newToken = await fetch('https://id.twitch.tv/oauth2/token', {
+  console.log({payload});
+  let newToken = await fetch('https://id.twitch.tv/oauth2/token', {
     method: 'POST',
     headers: {
     'Content-Type': 'application/x-www-form-urlencoded'
@@ -20,6 +22,7 @@ export async function createNewAuthToken() {
   return await newToken.json();
 }
 export async function createFollowSubscription(sessionID) {
+    console.log({TWITCH_TOKEN});
     let payload = {
         "type": "channel.follow",
 

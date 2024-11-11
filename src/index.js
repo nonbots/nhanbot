@@ -6,6 +6,13 @@ import { CommandManager } from "./commandManager.js";
 import { createNewAuthToken, createFollowSubscription } from './accessToken.js';
 import { isSentByStreamer } from "./permissions.js";
 import {
+  isCurSong,
+  getNhanifyPlaylistSong,
+  getChatPlaylistSong,
+  playChatQueue,
+  playNhanifyQueue,
+  getNhanifyPublicPlaylists,
+  getNhanifyPlaylist,
   durationSecsToHHMMSS,
   isValidURL,
   getVidInfo
@@ -28,54 +35,35 @@ const moveMessage = "Get up and move, your body will thank you!";
 const defaultMoveInterval = 60000 * 60 * 1; 
 const clientsOverlay = [];
 const chatQueue = [];
-const nhanifyPlaylists = await getNhanifyPublicPlaylists();
-const nhanifyPlaylistsLength = nhanifyPlaylists.length;
-let nhanifyPlaylistIdx = 0;
-let nhanifyQueueIdx = 0;
-let nhanifyQueue;
-let nhanifyQueueLength;
-do {
-  nhanifyQueue = await getNhanifyPlaylist(nhanifyPlaylists[nhanifyPlaylistIdx].id);
-  nhanifyQueueLength = nhanifyQueue.songs.length;
-}while (nhanifyQueue.songs.length === 0); 
-const COOLDOWN_DURATION = 30 * 1000;
-let IRC_connection;
-let moveInterval = defaultMoveInterval;
-let lastSongRequestTime = new Date() - COOLDOWN_DURATION;
 let song = null;
 let isSong = false;
+let IRC_connection;
+const nhanify = {
+  playlists: await getNhanifyPublicPlaylists(),
+  playlistIdx: 0,
+  queueIdx: 0,
+}
+nhanify.playlistsLength = nhanify.playlists.length;
+do {
+  nhanify.queue = await getNhanifyPlaylist(nhanify.playlists[nhanify.playlistIdx].id, IRC_connection);
+  nhanify.queueLength = nhanify.queue.songs.length;
+}while (nhanify.queue.songs.length === 0); 
+const COOLDOWN_DURATION = 30 * 1000;
+let moveInterval = defaultMoveInterval;
+let lastSongRequestTime = new Date() - COOLDOWN_DURATION;
 app.use(express.static('public'));
 
-async function getNhanifyPublicPlaylists() {
-  const response = await fetch(`https://www.nhanify.com/api/playlists/public`);
-  const result = await response.json();
-  const playlists =  result.playlists.reduce((accum,playlist) => {
-    if (playlist.songCount > 0) {
-      accum.push(playlist);
-    }
-    return accum;
-  }, []);
-  return shuffleArray(playlists);
-}
-function shuffleArray(arr) {
-  for (let i = arr.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [arr[i], arr[j]] = [arr[j], arr[i]]; // Swap elements
-  }
-  return arr;
-}
 nhanbotServer.on('request', (request) => {
   const connection = request.accept(null, request.origin);
   const whoami = request.resourceURL.search;
   if (whoami === "?whoami=overlay") {
-    connection.sendUTF(JSON.stringify({ queueLength: nhanifyPlaylists[nhanifyPlaylistIdx].songCount, queueCreatorName: nhanifyPlaylists[nhanifyPlaylistIdx].creator.username, queueTitle: nhanifyQueue.title, state:"queue_on_load"}));
+    connection.sendUTF(JSON.stringify({ queueLength: nhanify.playlists[nhanify.playlistIdx].songCount, queueCreatorName: nhanify.playlists[nhanify.playlistIdx].creator.username, queueTitle: nhanify.queue.title, state:"queue_on_load"}));
     clientsOverlay.push(connection);
   } 
 
   connection.on('message', async (message) => {
     if (message.type !== 'utf8') return;
     const data = JSON.parse(message.utf8Data);
-
     if (data.type  === "paused_song") {
       IRC_connection.sendUTF(`PRIVMSG #${authInfo.TWITCH_CHANNEL} : @${authInfo.TWITCH_CHANNEL}, music player has paused.`);
       return;
@@ -88,20 +76,23 @@ nhanbotServer.on('request', (request) => {
     // when there are songs on the chat queue and the previous has ended or the player has just started
     const isNotEmptyQueueOnSongChange = (data.type === "playerStateEnded"|| data.type === "playerStateStarted") && chatQueue.length !== 0;
     if (isNotEmptyQueueOnSongChange) {
-      playChatQueue();
+      console.log("Play song in chat", {chatQueue});
+      song = getChatPlaylistSong(chatQueue);
+      isSong = isCurSong(song);
+      playChatQueue(song, chatQueue, clientsOverlay, IRC_connection);
       return;
     }
     
     // when there are no songs on the chat queue and the last song is done playing
     const isChatQueueDone = data.type === "playerStateEnded"  && chatQueue.length === 0 && isSong;
     if (isChatQueueDone) {
-      const nhanifySong = nhanifyQueue.songs[nhanifyQueueIdx];
+      const nhanifySong = nhanify.queue.songs[nhanify.queueIdx];
       song = nhanifySong;
-      const updatedQueue = nhanifyQueue.songs.slice(nhanifyQueueIdx + 1);
-      nhanifyQueueIdx = (nhanifyQueueIdx === nhanifyQueueLength - 1) ? 0 : nhanifyQueueIdx += 1;
-      if (nhanifyQueueIdx === 0) {
-        nhanifyQueue = await getNhanifyPlaylist(nhanifyPlaylists[nhanifyPlaylistIdx].id);
-        nhanifyPlaylistIdx = (nhanifyPlaylistIdx === nhanifyPlaylistsLength - 1) ? 0 : nhanifyPlaylistIdx += 1;
+      const updatedQueue = nhanify.queue.songs.slice(nhanify.queueIdx + 1);
+      nhanify.queueIdx = (nhanify.queueIdx === nhanify.queueLength - 1) ? 0 : nhanify.queueIdx += 1;
+      if (nhanify.queueIdx === 0) {
+        nhanify.queue = await getNhanifyPlaylist(nhanify.playlists[nhanify.playlistIdx].id);
+        nhanify.playlistIdx = (nhanify.playlistIdx === nhanify.playlistsLength - 1) ? 0 : nhanify.playlistIdx += 1;
       }
       clientsOverlay.forEach(client => client.sendUTF(JSON.stringify({type: "chat", data: null, state: "end_queue", song: nhanifySong, nhanifyQueue: updatedQueue})));
       isSong = false;
@@ -109,51 +100,11 @@ nhanbotServer.on('request', (request) => {
     }
     
     // when there are no songs in the chat queue
-    await playNhanifyQueue();
+    song = getNhanifyPlaylistSong(nhanify.queue, nhanify.queueIdx); 
+    await playNhanifyQueue(nhanify,song, clientsOverlay);
   });
 });
 
-function playChatQueue() {
-  song = chatQueue.shift();
-  isSong = (song);
-  clientsOverlay.forEach(client => client.sendUTF(JSON.stringify({chatQueue, song, state:"play_song"})));
-  IRC_connection.sendUTF(`PRIVMSG #${authInfo.TWITCH_CHANNEL} : @${song.addedBy}, ${song.title} is now playing.`);
-}
-
-async function playNhanifyQueue() {
-  song = nhanifyQueue.songs[nhanifyQueueIdx];
-  const updatedQueue = nhanifyQueue.songs.slice(nhanifyQueueIdx + 1);
-  clientsOverlay.forEach(client => client.sendUTF(JSON.stringify({type: "chat", data: null, state: "nhanify_cur_song_play", song , nhanifyQueue: updatedQueue})));
-  nhanifyQueueIdx = (nhanifyQueueIdx === nhanifyQueueLength - 1) ? 0 : nhanifyQueueIdx += 1;
-  if (nhanifyQueueIdx === 0) {
-    do {
-      nhanifyPlaylistIdx = (nhanifyPlaylistIdx === nhanifyPlaylistsLength - 1) ? 0 : nhanifyPlaylistIdx += 1;
-      nhanifyQueue = await getNhanifyPlaylist(nhanifyPlaylists[nhanifyPlaylistIdx].id);
-    }while (nhanifyQueue.songs.length === 0); 
-    nhanifyQueueLength = nhanifyQueue.songs.length;
-    clientsOverlay.forEach(client => client.sendUTF(JSON.stringify({ queueLength: nhanifyPlaylists[nhanifyPlaylistIdx].songCount, queueCreatorName: nhanifyPlaylists[nhanifyPlaylistIdx].creator.username, queueTitle: nhanifyQueue.title, state:"queue_on_load"})));
-  }
-}
-
-async function getNhanifyPlaylist(playlistId) {
-  const response = await fetch(`https://www.nhanify.com/api/playlists/${playlistId}`);
-  const playlist = await response.json();
-  if (playlist.error === "404") {
-    IRC_connection.sendUTF(`PRIVMSG #${authInfo.TWITCH_CHANNEL} : Playlist does not exist.`);
-    return;
-  }
-  const songs = playlist.songs.reduce((accum, song) => {
-    if (song.durationSec <= 600) accum.push({title:song.title, videoId:song.videoId});
-    return accum;
-  }, []);
-  return {title: playlist.title, creatorId: playlist.creatorId, songs};
-}
-
-async function getCreatorName(creatorId) {
-  const response = await fetch(`https://www.nhanify.com/api/users/${creatorId}`);
-  const user = await response.json();
-  return user.username;
-}
 
 eventSubClient.on("close", (code, description) => {
     console.log(`Websocket ircClient disconnected: ${code} - ${description}`);
@@ -163,52 +114,51 @@ eventSubClient.on("close", (code, description) => {
 eventSubClient.on("connect", function (connection) {
   console.log("____________________EventSub Client Connected________________")
     let oldConnection;
+    let responseData;
     connection.on("message", async (message) => {
-        if (message.type === 'utf8') {
-            let data = JSON.parse(message.utf8Data);
-            if (data.metadata.message_type === "session_welcome") {
-                if (oldConnection !== undefined) oldConnection.close();
-                console.log(`close description: ${connection.closeDescription}`);
-                let responseData = await createFollowSubscription(data.payload.session.id);
-              if (responseData.message === 'Invalid OAuth token') {
-                let data  = await createNewAuthToken();
-                authInfo.TWITCH_TOKEN = data.access_token;
-                authInfo.REFRESH_TWITCH_TOKEN = data.refresh_token;
-                //console.log(authInfo.TWITCH_TOKEN);
-                //console.log({data});
-                writeFileSync("./src/auth.json", JSON.stringify(authInfo));
-                //IRC_connection.close();
-                //connection.close();
-                console.log("____________________GOT NEW TOKEN_______________");
-                reauth(IRC_connection);
-              }
-            }else if (data.metadata.message_type === "session_reconnect") {
-              oldConnection = connection 
-              eventSubClient.connect(`${data.payload.session.reconnect_url}`);
-              console.log(`Reconnected to ${data.payload.session.reconnect_url}`);
-            }else if (data.metadata.message_type === "notification"){
-              if (IRC_connection !== undefined) {
-                IRC_connection.sendUTF(`PRIVMSG #${authInfo.TWITCH_CHANNEL} :${data.payload.event.user_name} has followed!`);
-              }
-            }
-        }
-    });
+    if (message.type !== 'utf8') return;
+    let data = JSON.parse(message.utf8Data);
+    if (data.metadata.message_type === "session_welcome" ) {
+      if (oldConnection !== undefined) oldConnection.close();
+      console.log(`close description: ${connection.closeDescription}`);
+      responseData = await createFollowSubscription(data.payload.session.id);
+    }
+    if (data.metadata.message_type === "session_welcome" && responseData.message === 'Invalid OAuth token') {
+      let data  = await createNewAuthToken();
+      console.log({data});
+      if (data.status !== 400) {
+      authInfo.TWITCH_TOKEN = data.access_token;
+      authInfo.REFRESH_TWITCH_TOKEN = data.refresh_token;
+      writeFileSync("./src/auth.json", JSON.stringify(authInfo));
+      }
+      console.log("____________________GOT NEW TOKEN_______________");
+      IRC_connection.close();
+      ircClient.connect("ws://irc-ws.chat.twitch.tv:80");
+      return;
+    }
+    if (data.metadata.message_type === "session_reconnect") {
+      oldConnection = connection 
+      eventSubClient.connect(`${data.payload.session.reconnect_url}`);
+      console.log(`Reconnected to ${data.payload.session.reconnect_url}`);
+      return;
+    }
+    if (IRC_connection !== undefined && data.metadata.message_type === "notification"){
+      IRC_connection.sendUTF(`PRIVMSG #${authInfo.TWITCH_CHANNEL} :${data.payload.event.user_name} has followed!`);
+    }
+  });
 });
-
-function reauth(connection) {
-  connection.sendUTF(`PASS ${IRC_TOKEN}`);
-  connection.sendUTF(`NICK ${authInfo.TWITCH_ACCOUNT}`);
-  connection.sendUTF(`JOIN #${authInfo.TWITCH_CHANNEL}`);
-}
 
 //IRC client
 ircClient.on("connectFailed", function (error) {
   console.log("Connect Error: " + error.toString());
 });
+
 ircClient.on("connect", function (connection) {
   console.log("WebSocket Client Connected");
   IRC_connection = connection;
-  reauth(IRC_connection);
+  connection.sendUTF(`PASS ${IRC_TOKEN}`);
+  connection.sendUTF(`NICK ${authInfo.TWITCH_ACCOUNT}`);
+  connection.sendUTF(`JOIN #${authInfo.TWITCH_CHANNEL}`);
  // to keep the connect by responsing back with a PONG
   connection.on("message", function(message) {
       if (message.type === 'utf8') {
@@ -247,14 +197,28 @@ ircClient.on("connect", function (connection) {
     }
   });
 
+  commandManager.addCommand("skipPlaylist", async(message) => {
+    if (!isSentByStreamer(message)) return;
+    nhanify.playlistIdx = (nhanify.playlistIdx === nhanify.playlistsLength - 1) ? 0 : nhanify.playlistIdx += 1;
+    console.log("IN SKIP PLAYLIST", nhanify.playlistIdx, nhanify.playlists[nhanify.playlistIdx]);
+    nhanify.queue = nhanify.playlists[nhanify.playlistIdx];
+    nhanify.queueIdx = 0;
+    song = getNhanifyPlaylistSong(nhanify.queue, nhanify.queueIdx); 
+    await playNhanifyQueue(nhanify,song, clientsOverlay);
+    return;
+  });
+
   commandManager.addCommand("skipSong", async(message) => {
     if (!isSentByStreamer(message)) return;
     if (chatQueue.length === 0) {
-      nhanifyPlaylistIdx = (nhanifyPlaylistIdx === nhanifyPlaylistsLength - 1) ? 0 : nhanifyPlaylistIdx += 1;
-      await playNhanifyQueue();
+      nhanify.playlistIdx = (nhanify.playlistIdx === nhanify.playlistsLength - 1) ? 0 : nhanify.playlistIdx += 1;
+      song = getNhanifyPlaylistSong(nhanify.queue, nhanify.queueIdx); 
+      await playNhanifyQueue(nhanify,song, clientsOverlay);
       return;
     } 
-    playChatQueue();
+    song = getChatPlaylistSong(chatQueue);
+    isSong = isCurSong(song);
+    playChatQueue(song, chatQueue, clientsOverlay, IRC_connection);
   });
 
   commandManager.addCommand("pause", async(message) => {

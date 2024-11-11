@@ -1,3 +1,72 @@
+import authInfo from "./auth.json" with { type: 'json' }; // eslint-disable-line
+
+export function playChatQueue(song, chatQueue, clientsOverlay, IRC_connection) {
+  clientsOverlay.forEach(client => client.sendUTF(JSON.stringify({chatQueue, song, state:"play_song"})));
+  IRC_connection.sendUTF(`PRIVMSG #${authInfo.TWITCH_CHANNEL} : @${song.addedBy}, ${song.title} is now playing.`);
+}
+
+export async function playNhanifyQueue(nhanify, song, clientsOverlay) {
+  const updatedQueue = nhanify.queue.songs.slice(nhanify.queueIdx + 1);
+  nhanify.queueIdx = (nhanify.queueIdx === nhanify.queueLength - 1) ? 0 : nhanify.queueIdx += 1;
+  clientsOverlay.forEach(client => client.sendUTF(JSON.stringify({type: "chat", data: null, state: "nhanify_cur_song_play", song , nhanifyQueue: updatedQueue})));
+  if (nhanify.queueIdx === 0) {
+    do {
+      nhanify.playlistIdx = (nhanify.playlistIdx === nhanify.playlistsLength - 1) ? 0 : nhanify.playlistIdx += 1;
+      nhanify.queue = await getNhanifyPlaylist(nhanify.playlists[nhanify.playlistIdx].id);
+    }while (nhanify.queue.songs.length === 0); 
+    nhanify.queueLength = nhanify.queue.songs.length;
+    clientsOverlay.forEach(client => client.sendUTF(JSON.stringify({ queueLength: nhanify.playlists[nhanify.playlistIdx].songCount, queueCreatorName: nhanify.playlists[nhanify.playlistIdx].creator.username, queueTitle: nhanify.queue.title, state:"queue_on_load"})));
+  }
+}
+
+export function getChatPlaylistSong(playlist) {
+  console.log({playlist});
+  return playlist.shift();
+}
+export function isCurSong(song) {
+  return (song);
+}
+export function getNhanifyPlaylistSong(playlist, idx) {
+  console.log({playlist});
+  return playlist.songs[idx];
+}
+export async function getNhanifyPlaylist(playlistId, IRC_connection) {
+  const response = await fetch(`https://www.nhanify.com/api/playlists/${playlistId}`);
+  const playlist = await response.json();
+  if (playlist.error === "404") {
+    IRC_connection.sendUTF(`PRIVMSG #${authInfo.TWITCH_CHANNEL} : Playlist does not exist.`);
+    return;
+  }
+  const songs = playlist.songs.reduce((accum, song) => {
+    if (song.durationSec <= 600) accum.push({title:song.title, videoId:song.videoId});
+    return accum;
+  }, []);
+  return {title: playlist.title, creatorId: playlist.creatorId, songs};
+}
+
+async function getCreatorName(creatorId) {
+  const response = await fetch(`https://www.nhanify.com/api/users/${creatorId}`);
+  const user = await response.json();
+  return user.username;
+}
+export async function getNhanifyPublicPlaylists() {
+  const response = await fetch(`https://www.nhanify.com/api/playlists/public`);
+  const result = await response.json();
+  const playlists =  result.playlists.reduce((accum,playlist) => {
+    if (playlist.songCount > 0) {
+      accum.push(playlist);
+    }
+    return accum;
+  }, []);
+  return shuffleArray(playlists);
+}
+function shuffleArray(arr) {
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]]; // Swap elements
+  }
+  return arr;
+}
 /**
  * Is the URL input a valid url by hostname, pathname and is absolute.
  * @params {String} url - The url input.
