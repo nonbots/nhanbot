@@ -6,6 +6,7 @@ import { CommandManager } from "./commandManager.js";
 import { createNewAuthToken, createFollowSubscription } from './accessToken.js';
 import { isSentByStreamer } from "./permissions.js";
 import {
+  getNextNhanifyPublicPlaylist,
   isCurSong,
   getNhanifyPlaylistSong,
   getChatPlaylistSong,
@@ -43,6 +44,7 @@ const nhanify = {
   playlistIdx: 0,
   queueIdx: 0,
 }
+console.log(nhanify.playlists);
 nhanify.playlistsLength = nhanify.playlists.length;
 do {
   nhanify.queue = await getNhanifyPlaylist(nhanify.playlists[nhanify.playlistIdx].id, IRC_connection);
@@ -102,6 +104,9 @@ nhanbotServer.on('request', (request) => {
     // when there are no songs in the chat queue
     song = getNhanifyPlaylistSong(nhanify.queue, nhanify.queueIdx); 
     await playNhanifyQueue(nhanify,song, clientsOverlay);
+    if (nhanify.queueIdx === 0) {
+      await getNextNhanifyPublicPlaylist(nhanify, clientsOverlay);
+    }
   });
 });
 
@@ -199,13 +204,10 @@ ircClient.on("connect", function (connection) {
 
   commandManager.addCommand("skipPlaylist", async(message) => {
     if (!isSentByStreamer(message)) return;
-    nhanify.playlistIdx = (nhanify.playlistIdx === nhanify.playlistsLength - 1) ? 0 : nhanify.playlistIdx += 1;
-    console.log("IN SKIP PLAYLIST", nhanify.playlistIdx, nhanify.playlists[nhanify.playlistIdx]);
-    nhanify.queue = nhanify.playlists[nhanify.playlistIdx];
-    nhanify.queueIdx = 0;
-    song = getNhanifyPlaylistSong(nhanify.queue, nhanify.queueIdx); 
-    await playNhanifyQueue(nhanify,song, clientsOverlay);
-    return;
+    console.log("IN skipPlaylist");
+    await getNextNhanifyPublicPlaylist(nhanify, clientsOverlay);
+    song = getNhanifyPlaylistSong(nhanify.queue, nhanify.queueIdx);
+    await playNhanifyQueue(nhanify, song, clientsOverlay);
   });
 
   commandManager.addCommand("skipSong", async(message) => {

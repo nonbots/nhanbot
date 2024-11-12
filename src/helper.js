@@ -9,16 +9,24 @@ export async function playNhanifyQueue(nhanify, song, clientsOverlay) {
   const updatedQueue = nhanify.queue.songs.slice(nhanify.queueIdx + 1);
   nhanify.queueIdx = (nhanify.queueIdx === nhanify.queueLength - 1) ? 0 : nhanify.queueIdx += 1;
   clientsOverlay.forEach(client => client.sendUTF(JSON.stringify({type: "chat", data: null, state: "nhanify_cur_song_play", song , nhanifyQueue: updatedQueue})));
+  /*
   if (nhanify.queueIdx === 0) {
-    do {
-      nhanify.playlistIdx = (nhanify.playlistIdx === nhanify.playlistsLength - 1) ? 0 : nhanify.playlistIdx += 1;
-      nhanify.queue = await getNhanifyPlaylist(nhanify.playlists[nhanify.playlistIdx].id);
-    }while (nhanify.queue.songs.length === 0); 
-    nhanify.queueLength = nhanify.queue.songs.length;
-    clientsOverlay.forEach(client => client.sendUTF(JSON.stringify({ queueLength: nhanify.playlists[nhanify.playlistIdx].songCount, queueCreatorName: nhanify.playlists[nhanify.playlistIdx].creator.username, queueTitle: nhanify.queue.title, state:"queue_on_load"})));
+    await getNextNhanifyPublicPlaylist(nhanify, clientsOverlay);
   }
+  */
 }
 
+export async function getNextNhanifyPublicPlaylist(nhanify, clientsOverlay) {
+  console.log("IN GET NEXT PLAYLIST");
+  do {
+    nhanify.playlistIdx = (nhanify.playlistIdx === nhanify.playlistsLength - 1) ? 0 : nhanify.playlistIdx += 1;
+    nhanify.queue = await getNhanifyPlaylist(nhanify.playlists[nhanify.playlistIdx].id);
+  }while (nhanify.queue.songs.length === 0); 
+  console.log("THE NEXT PLAYLIST", nhanify.queue);
+  nhanify.queueIdx = 0;
+  nhanify.queueLength = nhanify.queue.songs.length;
+  clientsOverlay.forEach(client => client.sendUTF(JSON.stringify({ queueLength: nhanify.playlists[nhanify.playlistIdx].songCount, queueCreatorName: nhanify.playlists[nhanify.playlistIdx].creator.username, queueTitle: nhanify.queue.title, state:"queue_on_load"})));
+}
 export function getChatPlaylistSong(playlist) {
   console.log({playlist});
   return playlist.shift();
