@@ -233,6 +233,17 @@ ircClient.on("connect", function (connection) {
     clientsOverlay.forEach(client => client.sendUTF(JSON.stringify({state:"resume_song"})));
   });
 
+  commandManager.addCommand("playlist", async(message) => {
+    const chatter = message.source.nick;
+    console.log("CHAT QUEUE LENGTH", chatQueue.length);
+    if (song.playlistType !== "chat") {
+      console.log("CURRENT PLAYLIST", nhanify.playlists[nhanify.playlistIdx].id);
+      connection.sendUTF(`PRIVMSG ${message.command.channel} : @${chatter}, the playlist is found at https://www.nhanify.com/anon/public/playlists/1/playlist/1/${nhanify.playlists[nhanify.playlistIdx].id}.`);
+    } else {
+      connection.sendUTF(`PRIVMSG ${message.command.channel} : @${chatter}, you are listening to chat's playlist.`);
+    }
+  });
+
   commandManager.addCommand("sr", async(message) => {
   //  try {
       const addedBy = message.source.nick;
@@ -280,6 +291,7 @@ ircClient.on("connect", function (connection) {
       videoId: vidInfo.videoId,
       duration: durationSecsToHHMMSS(vidInfo.durationSecs),
       addedBy,
+      playlistType: "chat",
     });
      
     clientsOverlay.forEach(client => client.sendUTF(JSON.stringify({chatQueue, song, state:"add_song"})));
