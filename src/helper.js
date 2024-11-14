@@ -1,5 +1,18 @@
 import authInfo from "./auth.json" with { type: 'json' }; // eslint-disable-line
 
+export function addSavedVideoId(savedVideoIds,addedVideoId, addedBy) {
+  if(addedBy in savedVideoIds) {
+    savedVideoIds[addedBy].push(addedVideoId);
+  } else {
+    savedVideoIds[addedBy] = [addedVideoId];
+  }
+}
+export function isVideoIdSaved (addedBy, savedVideoIds, addedVideoId) {
+  if (!(addedBy in savedVideoIds)) return false;
+  const videoId = savedVideoIds[addedBy].find(videoId => addedVideoId === videoId);
+  if (videoId === undefined) return false;
+  return true;
+}
 export function playChatQueue(song, chatQueue, clientsOverlay, IRC_connection) {
   clientsOverlay.forEach(client => client.sendUTF(JSON.stringify({chatQueue, song, state:"play_song"})));
   IRC_connection.sendUTF(`PRIVMSG #${authInfo.TWITCH_CHANNEL} : @${song.addedBy}, ${song.title} is now playing.`);
@@ -9,11 +22,6 @@ export async function playNhanifyQueue(nhanify, song, clientsOverlay) {
   const updatedQueue = nhanify.queue.songs.slice(nhanify.queueIdx + 1);
   nhanify.queueIdx = (nhanify.queueIdx === nhanify.queueLength - 1) ? 0 : nhanify.queueIdx += 1;
   clientsOverlay.forEach(client => client.sendUTF(JSON.stringify({type: "chat", data: null, state: "nhanify_cur_song_play", song , nhanifyQueue: updatedQueue})));
-  /*
-  if (nhanify.queueIdx === 0) {
-    await getNextNhanifyPublicPlaylist(nhanify, clientsOverlay);
-  }
-  */
 }
 
 export async function getNextNhanifyPublicPlaylist(nhanify, clientsOverlay) {

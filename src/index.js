@@ -6,6 +6,8 @@ import { CommandManager } from "./commandManager.js";
 import { createNewAuthToken, createFollowSubscription } from './accessToken.js';
 import { isSentByStreamer } from "./permissions.js";
 import {
+  addSavedVideoId,
+  isVideoIdSaved,
   getNextNhanifyPublicPlaylist,
   isCurSong,
   getNhanifyPlaylistSong,
@@ -51,6 +53,7 @@ do {
   nhanify.queueLength = nhanify.queue.songs.length;
 }while (nhanify.queue.songs.length === 0); 
 const COOLDOWN_DURATION = 30 * 1000;
+const savedVideoIds = {};
 let moveInterval = defaultMoveInterval;
 let lastSongRequestTime = new Date() - COOLDOWN_DURATION;
 app.use(express.static('public'));
@@ -130,7 +133,7 @@ eventSubClient.on("connect", function (connection) {
     }
     if (data.metadata.message_type === "session_welcome" && responseData.message === 'Invalid OAuth token') {
       let data  = await createNewAuthToken();
-      console.log({data});
+      //console.log({data});
       if (data.status !== 400) {
       authInfo.TWITCH_TOKEN = data.access_token;
       authInfo.REFRESH_TWITCH_TOKEN = data.refresh_token;
@@ -204,7 +207,6 @@ ircClient.on("connect", function (connection) {
 
   commandManager.addCommand("skipPlaylist", async(message) => {
     if (!isSentByStreamer(message)) return;
-    console.log("IN skipPlaylist");
     await getNextNhanifyPublicPlaylist(nhanify, clientsOverlay);
     song = getNhanifyPlaylistSong(nhanify.queue, nhanify.queueIdx);
     await playNhanifyQueue(nhanify, song, clientsOverlay);
@@ -244,24 +246,21 @@ ircClient.on("connect", function (connection) {
     }
   });
 
-  commandManager.addCommand("sr", async(message) => {
-  //  try {
-      const addedBy = message.source.nick;
-      const timePassed = new Date() - lastSongRequestTime;
-      if (timePassed < COOLDOWN_DURATION) {
-        connection.sendUTF(`PRIVMSG ${message.command.channel} : @${addedBy}, ${Math.floor(COOLDOWN_DURATION / 1000) -  Math.floor(timePassed / 1000)} seconds more of cooldown.`);
-        return;
-      }
-      const url = message.command.botCommandParams;
-     /*
-      const playlistId = 6;
-      const addedBy = message.source.nick;
+  
+  commandManager.addCommand("save", async(message) => {
+    if (!isSentByStreamer(message)) return;
+    const addedBy = message.source.nick;
+    if (isVideoIdSaved(addedBy, savedVideoIds, song.videoId)) {
+      connection.sendUTF(`PRIVMSG ${message.command.channel} : @${addedBy}, This song has already been added to your "Saved Songs" playlist.`);
+      return;
+    };
+    addSavedVideoId(savedVideoIds,song.videoId, addedBy);
+    try {  
       let payload = {
-        url,
-        playlistId,
+        url: `https://www.youtube.com/watch?v=${song.videoId}`,
         addedBy,
       }
-      const response = await fetch("http://localhost:3002/api/playlist/addSong", {
+      const response = await fetch("https://www.nhanify.com/api/playlist/addSong", {
           method: 'POST',
           headers: {
               'Authorization': `Bearer ${authInfo.NHANIFY_API_KEY}`,
@@ -269,8 +268,38 @@ ircClient.on("connect", function (connection) {
           },
           body: JSON.stringify(payload)
       });
-    const result = await response.json();
-    */
+      const result = await response.json();
+      console.log("_______________SAVED SONG____________", {result});
+      switch(result.msg) {
+        case 'success':
+          connection.sendUTF(`PRIVMSG ${message.command.channel} : @${addedBy}, ${result.song.title} was added to your "Saved Song" playlist. You can find the playlist at https://www.nhanify.com/your/playlists/1/playlist/1/${result.song.playlist_id}`);
+          break;
+        case 'no_user_account':
+          connection.sendUTF(`PRIVMSG ${message.command.channel} : @${addedBy}, Create an account at https://wwww.nhanify.com.`);
+          break;
+        case 'playlist_max_limit':
+          connection.sendUTF(`PRIVMSG ${message.command.channel} : @${addedBy}, The playlist has reached it's max number of songs.`);
+          break;
+        case 'duplicate_video_id':
+          connection.sendUTF(`PRIVMSG ${message.command.channel} : @${addedBy}, This song has already been added to the playlist.`);
+          break;
+        default:
+          connection.sendUTF(`PRIVMSG ${message.command.channel} : @${addedBy}, Oops! Something went wrong.`);
+      }
+      } catch(error) {
+        console.error(error);
+        connection.sendUTF(`PRIVMSG ${message.command.channel} : Oops! Nhanify is not available.`);
+      }
+  });
+
+  commandManager.addCommand("sr", async(message) => {
+    const addedBy = message.source.nick;
+    const timePassed = new Date() - lastSongRequestTime;
+    if (timePassed < COOLDOWN_DURATION) {
+      connection.sendUTF(`PRIVMSG ${message.command.channel} : @${addedBy}, ${Math.floor(COOLDOWN_DURATION / 1000) -  Math.floor(timePassed / 1000)} seconds more of cooldown.`);
+      return;
+    }
+    const url = message.command.botCommandParams;
     if (!isValidURL(url)) {
       connection.sendUTF(`PRIVMSG ${message.command.channel} : @${addedBy}, This url is invalid.`);
       return;
@@ -296,27 +325,6 @@ ircClient.on("connect", function (connection) {
      
     clientsOverlay.forEach(client => client.sendUTF(JSON.stringify({chatQueue, song, state:"add_song"})));
     connection.sendUTF(`PRIVMSG ${message.command.channel} : @${addedBy}, ${vidInfo.title} was added to the queue.`);
-    /*switch(result.msg) {
-      case 'success':
-        connection.sendUTF(`PRIVMSG ${message.command.channel} : @${addedBy}, ${result.song.title} was added to "Twitch Stream" playlist.`);
-        break;
-      case 'no_user_account':
-        connection.sendUTF(`PRIVMSG ${message.command.channel} : @${addedBy}, Create an account at https://wwww.nhanify.com.`);
-        break;
-      case 'playlist_max_limit':
-        connection.sendUTF(`PRIVMSG ${message.command.channel} : @${addedBy}, The playlist has has reached it's max number of songs.`);
-        break;
-      case 'duplicate_video_id':
-        connection.sendUTF(`PRIVMSG ${message.command.channel} : @${addedBy}, This song has already been added to the playlist.`);
-        break;
-      default:
-        connection.sendUTF(`PRIVMSG ${message.command.channel} : @${addedBy}, Oops! Something went wrong.`);
-    }
-    } catch(error) {
-      console.error(error);
-      connection.sendUTF(`PRIVMSG ${message.command.channel} : Oops! Nhanify is not available.`);
-    }
-  */
   });
 
   commandManager.addCommand("commands", (message) => {
