@@ -248,7 +248,6 @@ ircClient.on("connect", function (connection) {
 
   
   commandManager.addCommand("save", async(message) => {
-    if (!isSentByStreamer(message)) return;
     const addedBy = message.source.nick;
     if (isVideoIdSaved(addedBy, savedVideoIds, song.videoId)) {
       connection.sendUTF(`PRIVMSG ${message.command.channel} : @${addedBy}, This song has already been added to your "Saved Songs" playlist.`);
