@@ -217,17 +217,8 @@ ircClient.on("connect", function (connection) {
     if (!isSentByStreamer(message)) return;
     if (chatQueue.length === 0) {
       // if we are at the last song of the current playlist 
-      console.log(`${nhanify.queueLength - 1} === ${nhanify.queueIdx}`);
       if ((nhanify.queueLength - 1) === nhanify.queueIdx) {
         getNextNhanifyPublicPlaylist(nhanify, clientsOverlay);
-        // reset the playlist index to 0 if it's the last playlist in playlists array if not increment the playlist index by one 
-        /*
-        nhanify.playlistIdx =  ((nhanify.playlistsLength - 1) === nhanify.playlistIdx) ? 0 : nhanify.playlistIdx + 1;
-        console.log("PlaylistIdx:", nhanify.playlistIdx);
-        nhanify.queue = await getNhanifyPlaylist(nhanify.playlists[nhanify.playlistIdx].id, IRC_connection);
-        nhanify.queueIdx = 0;
-        clientsOverlay.forEach(client => client.sendUTF(JSON.stringify({ queueLength: nhanify.playlists[nhanify.playlistIdx].songCount, queueCreatorName: nhanify.playlists[nhanify.playlistIdx].creator.username, queueTitle: nhanify.queue.title, state:"queue_on_load"})));
-      */
       }
       console.log("PlaylistIdx:", nhanify.playlistIdx, "PlaylistLength", nhanify.playlistsLength);
       song = getNhanifyPlaylistSong(nhanify.queue, nhanify.queueIdx); 
