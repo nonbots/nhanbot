@@ -1,4 +1,5 @@
 import authInfo from "./auth.json" with { type: 'json' }; // eslint-disable-line
+import commands from "./command.json" with { type: 'json' }; // eslint-disable-line
 import {writeFileSync } from 'node:fs';
 import websocket from "websocket";
 import http from 'http';
@@ -196,7 +197,7 @@ ircClient.on("connect", function (connection) {
     const result = await response.json();
     connection.sendUTF(`PRIVMSG ${message.command.channel} : ${result.playlists.length} public playlists`)
   })
-  commandManager.addCommand("song", async(message) => {
+  commandManager.addCommand(commands.song, async(message) => {
     const addedBy = message.source.nick;
     if (!song) {
         connection.sendUTF(`PRIVMSG ${message.command.channel} : @${addedBy}, no song currently playing in the queue.`);
@@ -205,17 +206,30 @@ ircClient.on("connect", function (connection) {
     }
   });
 
-  commandManager.addCommand("skipPlaylist", async(message) => {
+  commandManager.addCommand(commands.skipPlaylist, async(message) => {
     if (!isSentByStreamer(message)) return;
     await getNextNhanifyPublicPlaylist(nhanify, clientsOverlay);
     song = getNhanifyPlaylistSong(nhanify.queue, nhanify.queueIdx);
     await playNhanifyQueue(nhanify, song, clientsOverlay);
   });
 
-  commandManager.addCommand("skipSong", async(message) => {
+  commandManager.addCommand(commands.skipSong, async(message) => {
     if (!isSentByStreamer(message)) return;
     if (chatQueue.length === 0) {
-      nhanify.playlistIdx = (nhanify.playlistIdx === nhanify.playlistsLength - 1) ? 0 : nhanify.playlistIdx += 1;
+      // if we are at the last song of the current playlist 
+      console.log(`${nhanify.queueLength - 1} === ${nhanify.queueIdx}`);
+      if ((nhanify.queueLength - 1) === nhanify.queueIdx) {
+        getNextNhanifyPublicPlaylist(nhanify, clientsOverlay);
+        // reset the playlist index to 0 if it's the last playlist in playlists array if not increment the playlist index by one 
+        /*
+        nhanify.playlistIdx =  ((nhanify.playlistsLength - 1) === nhanify.playlistIdx) ? 0 : nhanify.playlistIdx + 1;
+        console.log("PlaylistIdx:", nhanify.playlistIdx);
+        nhanify.queue = await getNhanifyPlaylist(nhanify.playlists[nhanify.playlistIdx].id, IRC_connection);
+        nhanify.queueIdx = 0;
+        clientsOverlay.forEach(client => client.sendUTF(JSON.stringify({ queueLength: nhanify.playlists[nhanify.playlistIdx].songCount, queueCreatorName: nhanify.playlists[nhanify.playlistIdx].creator.username, queueTitle: nhanify.queue.title, state:"queue_on_load"})));
+      */
+      }
+      console.log("PlaylistIdx:", nhanify.playlistIdx, "PlaylistLength", nhanify.playlistsLength);
       song = getNhanifyPlaylistSong(nhanify.queue, nhanify.queueIdx); 
       await playNhanifyQueue(nhanify,song, clientsOverlay);
       return;
@@ -225,17 +239,17 @@ ircClient.on("connect", function (connection) {
     playChatQueue(song, chatQueue, clientsOverlay, IRC_connection);
   });
 
-  commandManager.addCommand("pause", async(message) => {
+  commandManager.addCommand(commands.pause, async(message) => {
     if (!isSentByStreamer(message)) return;
     clientsOverlay.forEach(client => client.sendUTF(JSON.stringify({state:"pause_song"})));
   });
 
-  commandManager.addCommand("resume", async(message) => {
+  commandManager.addCommand(commands.resume, async(message) => {
     if (!isSentByStreamer(message)) return;
     clientsOverlay.forEach(client => client.sendUTF(JSON.stringify({state:"resume_song"})));
   });
 
-  commandManager.addCommand("playlist", async(message) => {
+  commandManager.addCommand(commands.playlist, async(message) => {
     const chatter = message.source.nick;
     console.log("CHAT QUEUE LENGTH", chatQueue.length);
     if (song.playlistType !== "chat") {
@@ -247,7 +261,7 @@ ircClient.on("connect", function (connection) {
   });
 
   
-  commandManager.addCommand("save", async(message) => {
+  commandManager.addCommand(commands.save, async(message) => {
     const addedBy = message.source.nick;
     if (isVideoIdSaved(addedBy, savedVideoIds, song.videoId)) {
       connection.sendUTF(`PRIVMSG ${message.command.channel} : @${addedBy}, This song has already been added to your "Saved Songs" playlist.`);
@@ -274,7 +288,7 @@ ircClient.on("connect", function (connection) {
           connection.sendUTF(`PRIVMSG ${message.command.channel} : @${addedBy}, ${result.song.title} was added to your "Saved Song" playlist. You can find the playlist at https://www.nhanify.com/your/playlists/1/playlist/1/${result.song.playlist_id}`);
           break;
         case 'no_user_account':
-          connection.sendUTF(`PRIVMSG ${message.command.channel} : @${addedBy}, Create an account at https://wwww.nhanify.com.`);
+          connection.sendUTF(`PRIVMSG ${message.command.channel} : @${addedBy}, Create an account at https://www.nhanify.com.`);
           break;
         case 'playlist_max_limit':
           connection.sendUTF(`PRIVMSG ${message.command.channel} : @${addedBy}, The playlist has reached it's max number of songs.`);
@@ -291,7 +305,7 @@ ircClient.on("connect", function (connection) {
       }
   });
 
-  commandManager.addCommand("sr", async(message) => {
+  commandManager.addCommand(commands.sr, async(message) => {
     const addedBy = message.source.nick;
     const timePassed = new Date() - lastSongRequestTime;
     if (timePassed < COOLDOWN_DURATION) {
