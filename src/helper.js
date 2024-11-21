@@ -124,29 +124,22 @@ async function getVidInfoByVidId(videoId, YT_API_KEY) {
   const response = await fetch(url, headers);
   const result = await response.json();
   if (!result.items[0]) return null;
-  console.log(result, "ALLOWED?");
-  console.log(result.items[0], "ALLOWED?");
-  console.log(result.items[0].contentDetails, "ALLOWED?");
-  console.log(result.items[0].contentDetails.contentRating.ytRating, "CONTENT RATING");
-  //console.log(result.items[0].contentDetails.regionRestriction, "ALLOWED?");
   const regionRestriction = result.items[0].contentDetails.regionRestriction;
   const ageRestriction  = result.items[0].contentDetails.contentRating.ytRating;
   const liveStream = result.items[0].liveStreamingDetails;
   if (liveStream) {
-    const vidInfo = { error: "liveStreamRestriction" };
-    return vidInfo;
+    return  { error: "liveStreamRestriction" };
   }
   if (ageRestriction  && ageRestriction === "ytAgeRestricted") {
-    const vidInfo = { error: "ageRestriction" };
-    return vidInfo;
+    return { error: "ageRestriction" };
   }
-  if (regionRestriction && !regionRestriction.allowed.includes('US')) {
-    const vidInfo = { error: "regionRestriction" };
-    return vidInfo;
+  if (regionRestriction) {
+    if ((regionRestriction.allowed && !regionRestriction.allowed.includes('US')) || (regionRestriction.blocked && regionRestriction.blocked.includes('US'))) {
+      return { error: "regionRestriction" };
+    }
   }
   if (result.items[0].status.embeddable === false) {
-    const vidInfo = { error: "notEmbeddable" };
-    return vidInfo;
+    return { error: "notEmbeddable" };
   }
   const duration = convertDuration(result.items[0].contentDetails.duration);
   console.log("CONTENTDETAILS", result.items[0].contentDetails);
@@ -158,6 +151,7 @@ async function getVidInfoByVidId(videoId, YT_API_KEY) {
   };
   return vidInfo;
 }
+
 function parseURL(URLInput) {
   if (URLInput.includes("youtu.be")) {
     let hostPath = URLInput.split("?")[0];

@@ -4,7 +4,7 @@ import {writeFileSync } from 'node:fs';
 import websocket from "websocket";
 import http from 'http';
 import { CommandManager } from "./commandManager.js";
-import { createNewAuthToken, createSubscription } from './accessToken.js';
+import { createNewAuthToken, createSubscription, getRewards } from './accessToken.js';
 import { isSentByStreamer } from "./permissions.js";
 import {
   addSavedVideoId,
@@ -123,18 +123,17 @@ eventSubClient.on("close", (code, description) => {
 eventSubClient.on("connect", function (connection) {
   console.log("____________________EventSub Client Connected________________")
     let oldConnection;
-    let responseData;
+    let followersData;
     connection.on("message", async (message) => {
     if (message.type !== 'utf8') return;
     let data = JSON.parse(message.utf8Data);
     if (data.metadata.message_type === "session_welcome" ) {
       if (oldConnection !== undefined) oldConnection.close();
-      console.log("SESSIONID", data.payload.session.id);
       console.log(`close description: ${connection.closeDescription}`);
-      responseData = await createSubscription(data.payload.session.id, "channel.follow", 'https://api.twitch.tv/helix/eventsub/subscriptions');
-      console.log({responseData});
+      const sessionId = data.payload.session.id;
+      followersData = await createSubscription(sessionId, "channel.follow", 'https://api.twitch.tv/helix/eventsub/subscriptions');
     }
-    if (data.metadata.message_type === "session_welcome" && responseData.message === 'Invalid OAuth token') {
+    if (data.metadata.message_type === "session_welcome" && followersData.message === 'Invalid OAuth token') {
       let data  = await createNewAuthToken();
       //console.log({data});
       if (data.status !== 400) {

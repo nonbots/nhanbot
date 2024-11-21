@@ -26,6 +26,17 @@ curl -X GET 'https://api.twitch.tv/helix/channel_points/custom_rewards?broadcast
 -H 'Client-Id: gx2pv4208cff0ig9ou7nk3riccffxt' \
 -H 'Authorization: Bearer vjxv3i0l4zxru966wsnwji51tmpkj2'
 */
+export async function getRewards(fetchURL) {
+  const res = await fetch(fetchURL, 
+    {
+      headers: {
+        'Client-Id': CLIENT_ID,
+        'Authorization': `Bearer ${TWITCH_TOKEN}`,
+      }
+  });
+  return await res.json();
+}
+
 export async function createSubscription(sessionID, payloadType, fetchURL) {
    // console.log({TWITCH_TOKEN});
     let payload = {
@@ -43,34 +54,6 @@ export async function createSubscription(sessionID, payloadType, fetchURL) {
     };
 
      let res = await fetch(fetchURL, {
-        method: 'POST',
-        headers: {
-            'Client-Id': CLIENT_ID,
-            'Authorization': `Bearer ${TWITCH_TOKEN}`,
-            'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(payload)
-    });
-
-    return await res.json();
-};
-export async function createFollowSubscription(sessionID) {
-    //console.log({TWITCH_TOKEN});
-    let payload = {
-        "type": "channel.follow",
-
-        "version": "2",
-        "condition": {
-            "broadcaster_user_id": BROADCASTER_ID,
-            "moderator_user_id": BOT_ID
-        },
-        "transport": {
-            "method": "websocket",
-            "session_id": sessionID
-        }
-    };
-
-     let res = await fetch('https://api.twitch.tv/helix/eventsub/subscriptions', {
         method: 'POST',
         headers: {
             'Client-Id': CLIENT_ID,
