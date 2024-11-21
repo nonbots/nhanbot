@@ -4,7 +4,7 @@ import {writeFileSync } from 'node:fs';
 import websocket from "websocket";
 import http from 'http';
 import { CommandManager } from "./commandManager.js";
-import { createNewAuthToken, createFollowSubscription } from './accessToken.js';
+import { createNewAuthToken, createSubscription } from './accessToken.js';
 import { isSentByStreamer } from "./permissions.js";
 import {
   addSavedVideoId,
@@ -129,8 +129,10 @@ eventSubClient.on("connect", function (connection) {
     let data = JSON.parse(message.utf8Data);
     if (data.metadata.message_type === "session_welcome" ) {
       if (oldConnection !== undefined) oldConnection.close();
+      console.log("SESSIONID", data.payload.session.id);
       console.log(`close description: ${connection.closeDescription}`);
-      responseData = await createFollowSubscription(data.payload.session.id);
+      responseData = await createSubscription(data.payload.session.id, "channel.follow", 'https://api.twitch.tv/helix/eventsub/subscriptions');
+      console.log({responseData});
     }
     if (data.metadata.message_type === "session_welcome" && responseData.message === 'Invalid OAuth token') {
       let data  = await createNewAuthToken();
@@ -251,6 +253,11 @@ ircClient.on("connect", function (connection) {
     }
   });
 
+ commandManager.addCommand(commands.nhanify, (message) => {
+    connection.sendUTF(
+      `PRIVMSG ${message.command.channel} : Learn what Nhanify is about here: https://www.youtube.com/shorts/d6Uwh81MoKM`
+    );
+  });
   
   commandManager.addCommand(commands.save, async(message) => {
     const addedBy = message.source.nick;
@@ -309,6 +316,23 @@ ircClient.on("connect", function (connection) {
       return;
     }
     const vidInfo = await getVidInfo(url, authInfo.YT_API_KEY);
+    console.log(vidInfo);
+    if (vidInfo.error === "liveStreamRestriction") {
+      connection.sendUTF(`privmsg ${message.command.channel} : @${addedBy}, Live streams can't be added, :(.`);
+      return;
+    }
+    if (vidInfo.error === "agerestriction") {
+      connection.sendUTF(`privmsg ${message.command.channel} : @${addedBy}, This video can't be added due to age restriction, :(.`);
+      return;
+    }
+    if (vidInfo.error === "notEmbeddable") {
+      connection.sendUTF(`PRIVMSG ${message.command.channel} : @${addedBy}, This video can't be added because it can't be embedded to the Youtube player, :(.`);
+      return;
+    }
+    if (vidInfo.error === "regionRestriction") {
+      connection.sendUTF(`PRIVMSG ${message.command.channel} : @${addedBy}, This video is restricted in the US, :(.`);
+      return;
+    }
     if (!vidInfo) {
       connection.sendUTF(`PRIVMSG ${message.command.channel} : @${addedBy}, This video id is invalid.`);
       return;

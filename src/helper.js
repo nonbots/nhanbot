@@ -119,14 +119,37 @@ async function getVidInfoByVidId(videoId, YT_API_KEY) {
   url.search = new URLSearchParams({
     key: YT_API_KEY,
     id: videoId,
-    part: ["snippet", "contentDetails"],
+    part: ["liveStreamingDetails", "snippet", "contentDetails", "status"],
   }).toString();
   const response = await fetch(url, headers);
   const result = await response.json();
-  console.log("RESULTS", result);
-  console.log("ITEMS", result.items);
   if (!result.items[0]) return null;
+  console.log(result, "ALLOWED?");
+  console.log(result.items[0], "ALLOWED?");
+  console.log(result.items[0].contentDetails, "ALLOWED?");
+  console.log(result.items[0].contentDetails.contentRating.ytRating, "CONTENT RATING");
+  //console.log(result.items[0].contentDetails.regionRestriction, "ALLOWED?");
+  const regionRestriction = result.items[0].contentDetails.regionRestriction;
+  const ageRestriction  = result.items[0].contentDetails.contentRating.ytRating;
+  const liveStream = result.items[0].liveStreamingDetails;
+  if (liveStream) {
+    const vidInfo = { error: "liveStreamRestriction" };
+    return vidInfo;
+  }
+  if (ageRestriction  && ageRestriction === "ytAgeRestricted") {
+    const vidInfo = { error: "ageRestriction" };
+    return vidInfo;
+  }
+  if (regionRestriction && !regionRestriction.allowed.includes('US')) {
+    const vidInfo = { error: "regionRestriction" };
+    return vidInfo;
+  }
+  if (result.items[0].status.embeddable === false) {
+    const vidInfo = { error: "notEmbeddable" };
+    return vidInfo;
+  }
   const duration = convertDuration(result.items[0].contentDetails.duration);
+  console.log("CONTENTDETAILS", result.items[0].contentDetails);
   const durationSecs = convertToSec(duration);
   const vidInfo = {
     title: result.items[0].snippet.title,
