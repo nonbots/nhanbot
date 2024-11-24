@@ -143,7 +143,8 @@ async function getVidInfoByVidId(videoId, YT_API_KEY) {
   const regionRestriction = result.items[0].contentDetails.regionRestriction;
   const ageRestriction  = result.items[0].contentDetails.contentRating.ytRating;
   const liveStream = result.items[0].liveStreamingDetails;
-  if (liveStream) {
+  console.log({liveStream});
+  if ((liveStream && !liveStream.actualEndTime) || (liveStream && liveStream.actualEndTime && liveStream.actualEndTime > new Date())) {
     return  { error: "liveStreamRestriction" };
   }
   if (ageRestriction  && ageRestriction === "ytAgeRestricted") {

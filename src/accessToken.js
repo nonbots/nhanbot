@@ -1,14 +1,15 @@
-import authInfo from "./auth.json" with { type: 'json' };
-const {TWITCH_TOKEN, BOT_ID, BROADCASTER_ID, CLIENT_ID, CLIENT_SECRET, REFRESH_TWITCH_TOKEN} = authInfo;
+import {writeFileSync } from 'node:fs';
+import authInfo from "./auth.json" with { type: 'json' }; // eslint-disable-line
+//const {TWITCH_TOKEN, BOT_ID, BROADCASTER_ID, CLIENT_ID, CLIENT_SECRET, REFRESH_TWITCH_TOKEN} = authInfo;
 
 export async function createNewAuthToken() {
   //console.log({REFRESH_TWITCH_TOKEN});
   let payload = {
     "grant_type": "refresh_token",
-    "refresh_token": REFRESH_TWITCH_TOKEN,
+    "refresh_token": authInfo.REFRESH_TWITCH_TOKEN,
     // keys are not the same as the api, might not work
-    "client_id": CLIENT_ID,
-    "client_secret": CLIENT_SECRET
+    "client_id": authInfo.CLIENT_ID,
+    "client_secret": authInfo.CLIENT_SECRET
   }
   //console.log({payload});
   let newToken = await fetch('https://id.twitch.tv/oauth2/token', {
@@ -42,8 +43,8 @@ export async function getRewards(fetchURL) {
   const res = await fetch(fetchURL, 
     {
       headers: {
-        'Client-Id': CLIENT_ID,
-        'Authorization': `Bearer ${TWITCH_TOKEN}`,
+        'Client-Id': authInfo.CLIENT_ID,
+        'Authorization': `Bearer ${authInfo.TWITCH_TOKEN}`,
       }
   });
   return await res.json();
@@ -56,8 +57,8 @@ export async function createSubscription(sessionID, payloadType, versionStr) {
 
         "version": versionStr,
         "condition": {
-            "broadcaster_user_id": BROADCASTER_ID,
-            "moderator_user_id": BROADCASTER_ID
+            "broadcaster_user_id": authInfo.BROADCASTER_ID,
+            "moderator_user_id": authInfo.BROADCASTER_ID
         },
         "transport": {
             "method": "websocket",
@@ -67,8 +68,8 @@ export async function createSubscription(sessionID, payloadType, versionStr) {
      let res = await fetch('https://api.twitch.tv/helix/eventsub/subscriptions', {
         method: 'POST',
         headers: {
-            'Client-Id': CLIENT_ID,
-            'Authorization': `Bearer ${TWITCH_TOKEN}`,
+            'Client-Id': authInfo.CLIENT_ID,
+            'Authorization': `Bearer ${authInfo.TWITCH_TOKEN}`,
             'Content-Type': 'application/json'
         },
         body: JSON.stringify(payload)

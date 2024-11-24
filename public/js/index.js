@@ -3,7 +3,7 @@ tag.src = "https://www.youtube.com/iframe_api";
 var firstScriptTag = document.getElementsByTagName("script")[0];
 firstScriptTag.parentNode.insertBefore(tag, firstScriptTag);
 var player;
-const socket = new WebSocket("ws://localhost:8082/?whoami=overlay");
+const socket = new WebSocket("ws://localhost:8080/?whoami=overlay");
 socket.onopen = function (_event) {
   console.log("WebSocket connection opened.");
 };
