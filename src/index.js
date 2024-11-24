@@ -4,9 +4,10 @@ import {writeFileSync } from 'node:fs';
 import websocket from "websocket";
 import http from 'http';
 import { CommandManager } from "./commandManager.js";
-import { createNewAuthToken, createSubscription, getRewards } from './accessToken.js';
+import { createNewAuthToken, createSubscription, refreshToken } from './accessToken.js';
 import { isSentByStreamer } from "./permissions.js";
 import {
+  skipSong,
   addSavedVideoId,
   isVideoIdSaved,
   getNextNhanifyPublicPlaylist,
@@ -28,7 +29,7 @@ const server = http.createServer((req, res) => {
   res.writeHead(404);
   res.end();
 });
-const IRC_TOKEN = `oauth:${authInfo.TWITCH_TOKEN}`
+const IRC_TOKEN = `oauth:${authInfo.BOT_TWITCH_TOKEN}`
 const commandManager = new CommandManager();
 const ircClient = new WebSocketClient();
 const eventSubClient = new WebSocketClient();
@@ -120,10 +121,12 @@ eventSubClient.on("close", (code, description) => {
 });
 
 //eventSubClient.onerror(evt);
-eventSubClient.on("connect", function (connection) {
+eventSubClient.on("connect", async function (connection) {
   console.log("____________________EventSub Client Connected________________")
     let oldConnection;
-    let followersData;
+    let followerEvent;
+    let skipSongRedemptionEvent;
+
     connection.on("message", async (message) => {
     if (message.type !== 'utf8') return;
     let data = JSON.parse(message.utf8Data);
@@ -131,29 +134,41 @@ eventSubClient.on("connect", function (connection) {
       if (oldConnection !== undefined) oldConnection.close();
       console.log(`close description: ${connection.closeDescription}`);
       const sessionId = data.payload.session.id;
-      followersData = await createSubscription(sessionId, "channel.follow", 'https://api.twitch.tv/helix/eventsub/subscriptions');
+      followerEvent = await createSubscription(sessionId, "channel.follow", '2');
+      skipSongRedemptionEvent = await createSubscription(sessionId, "channel.channel_points_custom_reward_redemption.add", '1');
+      console.log({followerEvent, skipSongRedemptionEvent });
     }
-    if (data.metadata.message_type === "session_welcome" && followersData.message === 'Invalid OAuth token') {
-      let data  = await createNewAuthToken();
-      //console.log({data});
-      if (data.status !== 400) {
-      authInfo.TWITCH_TOKEN = data.access_token;
-      authInfo.REFRESH_TWITCH_TOKEN = data.refresh_token;
-      writeFileSync("./src/auth.json", JSON.stringify(authInfo));
-      }
-      console.log("____________________GOT NEW TOKEN_______________");
+    if (data.metadata.message_type === "session_welcome" && followerEvent.message === 'Invalid OAuth token') {
+      console.log("IN INVALID OAUTH TOKEN");
+      refreshToken("broadcaster");
+      console.log("____________________GOT NEW BROADCASTER TOKEN_______________");
       IRC_connection.close();
       ircClient.connect("ws://irc-ws.chat.twitch.tv:80");
       return;
-    }
-    if (data.metadata.message_type === "session_reconnect") {
+    } 
+      if (data.metadata.message_type === "session_reconnect") {
       oldConnection = connection 
       eventSubClient.connect(`${data.payload.session.reconnect_url}`);
       console.log(`Reconnected to ${data.payload.session.reconnect_url}`);
       return;
     }
     if (IRC_connection !== undefined && data.metadata.message_type === "notification"){
-      IRC_connection.sendUTF(`PRIVMSG #${authInfo.TWITCH_CHANNEL} :${data.payload.event.user_name} has followed!`);
+      if (data.metadata.subscription_type === "channel.follow") {
+        IRC_connection.sendUTF(`PRIVMSG #${authInfo.TWITCH_CHANNEL} :${data.payload.event.user_name} has followed!`);
+      }
+      if (data.metadata.subscription_type === "channel.channel_points_custom_reward_redemption.add") {
+        const title = data.payload.event.reward.title;
+        if ( title  === "Skip Song") {
+        skipSong(chatQueue, nhanify, clientsOverlay, song, isSong, IRC_connection );
+        IRC_connection.sendUTF(`PRIVMSG #${authInfo.TWITCH_CHANNEL} :${data.payload.event.user_name}, redeemed the ${title} for ${data.payload.event.reward.cost}.`);
+        }
+        if ( title  === "Skip Playlist") {
+        await getNextNhanifyPublicPlaylist(nhanify, clientsOverlay);
+        song = getNhanifyPlaylistSong(nhanify.queue, nhanify.queueIdx);
+        await playNhanifyQueue(nhanify, song, clientsOverlay);
+        IRC_connection.sendUTF(`PRIVMSG #${authInfo.TWITCH_CHANNEL} :${data.payload.event.user_name}, redeemed the ${title} for ${data.payload.event.reward.cost}.`);
+        }
+      }
     }
   });
 });
@@ -167,14 +182,19 @@ ircClient.on("connect", function (connection) {
   console.log("WebSocket Client Connected");
   IRC_connection = connection;
   connection.sendUTF(`PASS ${IRC_TOKEN}`);
-  connection.sendUTF(`NICK ${authInfo.TWITCH_ACCOUNT}`);
-  connection.sendUTF(`JOIN #${authInfo.TWITCH_CHANNEL}`);
+  connection.sendUTF(`NICK ${authInfo.TWITCH_ACCOUNT}`);//nhanifybot
+  connection.sendUTF(`JOIN #${authInfo.TWITCH_CHANNEL}`);//nhancodes
  // to keep the connect by responsing back with a PONG
-  connection.on("message", function(message) {
+  connection.on("message", async function(message) {
       if (message.type === 'utf8') {
+        console.log(message.utf8Data);
         if (message.utf8Data.startsWith('PING :tmi.twitch.tv')) {
           connection.sendUTF('PONG :tmi.twitch.tv');
         } 
+        if (message.utf8Data.includes(":tmi.twitch.tv NOTICE * :Login authentication failed")) {
+          refreshToken("bot");
+          console.log("____GOT NEW BOT TOKEN______");
+        }
       }
   });
 
@@ -216,19 +236,7 @@ ircClient.on("connect", function (connection) {
 
   commandManager.addCommand(commands.skipSong, async(message) => {
     if (!isSentByStreamer(message)) return;
-    if (chatQueue.length === 0) {
-      // if we are at the last song of the current playlist 
-      if ((nhanify.queueLength - 1) === nhanify.queueIdx) {
-        getNextNhanifyPublicPlaylist(nhanify, clientsOverlay);
-      }
-      console.log("PlaylistIdx:", nhanify.playlistIdx, "PlaylistLength", nhanify.playlistsLength);
-      song = getNhanifyPlaylistSong(nhanify.queue, nhanify.queueIdx); 
-      await playNhanifyQueue(nhanify,song, clientsOverlay);
-      return;
-    } 
-    song = getChatPlaylistSong(chatQueue);
-    isSong = isCurSong(song);
-    playChatQueue(song, chatQueue, clientsOverlay, IRC_connection);
+      skipSong(chatQueue, nhanify, clientsOverlay, song, isSong, IRC_connection );
   });
 
   commandManager.addCommand(commands.pause, async(message) => {

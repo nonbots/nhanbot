@@ -1,5 +1,21 @@
 import authInfo from "./auth.json" with { type: 'json' }; // eslint-disable-line
 
+export async function skipSong (chatQueue, nhanify, clientsOverlay, song, isSong, IRC_connection ) {
+  if (chatQueue.length === 0) {
+    // if we are at the last song of the current playlist 
+    if ((nhanify.queueLength - 1) === nhanify.queueIdx) {
+      getNextNhanifyPublicPlaylist(nhanify, clientsOverlay);
+    }
+    console.log("PlaylistIdx:", nhanify.playlistIdx, "PlaylistLength", nhanify.playlistsLength);
+    song = getNhanifyPlaylistSong(nhanify.queue, nhanify.queueIdx); 
+    await playNhanifyQueue(nhanify,song, clientsOverlay);
+    return;
+  } 
+  song = getChatPlaylistSong(chatQueue);
+  isSong = isCurSong(song);
+  playChatQueue(song, chatQueue, clientsOverlay, IRC_connection);
+}
+
 export function addSavedVideoId(savedVideoIds,addedVideoId, addedBy) {
   if(addedBy in savedVideoIds) {
     savedVideoIds[addedBy].push(addedVideoId);

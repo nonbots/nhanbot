@@ -1,3 +1,0 @@
-This is the new content
-This is the new content from the CLI
-This is the third line

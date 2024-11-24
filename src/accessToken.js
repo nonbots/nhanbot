@@ -21,11 +21,23 @@ export async function createNewAuthToken() {
   });
   return await newToken.json();
 }
-/*
-curl -X GET 'https://api.twitch.tv/helix/channel_points/custom_rewards?broadcaster_id=274637212'
--H 'Client-Id: gx2pv4208cff0ig9ou7nk3riccffxt' \
--H 'Authorization: Bearer vjxv3i0l4zxru966wsnwji51tmpkj2'
-*/
+
+export async function refreshToken(entity) {
+  let data  = await createNewAuthToken();
+  if ("access_token" in data ) {
+    if (entity === "bot") {
+      authInfo.BOT_TWITCH_TOKEN = data.access_token;
+      authInfo.BOT_REFRESH_TWITCH_TOKEN = data.refresh_token;
+    } else if (entity === "broadcaster"){
+      authInfo.TWITCH_TOKEN = data.access_token;
+      authInfo.REFRESH_TWITCH_TOKEN = data.refresh_token;
+    }
+    writeFileSync("./src/auth.json", JSON.stringify(authInfo));
+  } else {
+    console.log(data.status);
+    return;
+  }
+}
 export async function getRewards(fetchURL) {
   const res = await fetch(fetchURL, 
     {
@@ -37,23 +49,22 @@ export async function getRewards(fetchURL) {
   return await res.json();
 }
 
-export async function createSubscription(sessionID, payloadType, fetchURL) {
+export async function createSubscription(sessionID, payloadType, versionStr) {
    // console.log({TWITCH_TOKEN});
     let payload = {
         "type": payloadType,
 
-        "version": "2",
+        "version": versionStr,
         "condition": {
             "broadcaster_user_id": BROADCASTER_ID,
-            "moderator_user_id": BOT_ID
+            "moderator_user_id": BROADCASTER_ID
         },
         "transport": {
             "method": "websocket",
             "session_id": sessionID
         }
     };
-
-     let res = await fetch(fetchURL, {
+     let res = await fetch('https://api.twitch.tv/helix/eventsub/subscriptions', {
         method: 'POST',
         headers: {
             'Client-Id': CLIENT_ID,
@@ -63,5 +74,6 @@ export async function createSubscription(sessionID, payloadType, fetchURL) {
         body: JSON.stringify(payload)
     });
 
-    return await res.json();
+    const data = await res.json();
+    return data;
 };
