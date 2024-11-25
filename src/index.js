@@ -140,7 +140,7 @@ eventSubClient.on("connect", async function (connection) {
     }
     if (data.metadata.message_type === "session_welcome" && followerEvent.message === 'Invalid OAuth token') {
       console.log("IN INVALID OAUTH TOKEN");
-      refreshToken("broadcaster");
+      refreshToken(authInfo.REFRESH_TWITCH_TOKEN, "broadcaster");
       console.log("____________________GOT NEW BROADCASTER TOKEN_______________");
       IRC_connection.close();
       ircClient.connect("ws://irc-ws.chat.twitch.tv:80");
@@ -192,7 +192,7 @@ ircClient.on("connect", function (connection) {
           connection.sendUTF('PONG :tmi.twitch.tv');
         } 
         if (message.utf8Data.includes(":tmi.twitch.tv NOTICE * :Login authentication failed")) {
-          refreshToken("bot");
+          refreshToken(authInfo.BOT_REFRESH_TWITCH_TOKEN, "bot");
           console.log("____GOT NEW BOT TOKEN______");
         }
       }

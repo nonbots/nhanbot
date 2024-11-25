@@ -2,11 +2,11 @@ import {writeFileSync } from 'node:fs';
 import authInfo from "./auth.json" with { type: 'json' }; // eslint-disable-line
 //const {TWITCH_TOKEN, BOT_ID, BROADCASTER_ID, CLIENT_ID, CLIENT_SECRET, REFRESH_TWITCH_TOKEN} = authInfo;
 
-export async function createNewAuthToken() {
+export async function createNewAuthToken(REFRESH_TWITCH_TOKEN) {
   //console.log({REFRESH_TWITCH_TOKEN});
   let payload = {
     "grant_type": "refresh_token",
-    "refresh_token": authInfo.REFRESH_TWITCH_TOKEN,
+    "refresh_token": REFRESH_TWITCH_TOKEN,
     // keys are not the same as the api, might not work
     "client_id": authInfo.CLIENT_ID,
     "client_secret": authInfo.CLIENT_SECRET
@@ -23,22 +23,23 @@ export async function createNewAuthToken() {
   return await newToken.json();
 }
 
-export async function refreshToken(entity) {
-  let data  = await createNewAuthToken();
+export async function refreshToken(REFRESH_TWITCH_TOKEN, entity) {
+  let data  = await createNewAuthToken(REFRESH_TWITCH_TOKEN);
   if ("access_token" in data ) {
     if (entity === "bot") {
       authInfo.BOT_TWITCH_TOKEN = data.access_token;
       authInfo.BOT_REFRESH_TWITCH_TOKEN = data.refresh_token;
-    } else if (entity === "broadcaster"){
-      authInfo.TWITCH_TOKEN = data.access_token;
-      authInfo.REFRESH_TWITCH_TOKEN = data.refresh_token;
+    }
+    if (entity === "broadcaster") {
+      authInfo.REFRESH_TWITCH_TOKEN = data.access_token;
+      authInfo.REFRESH_TWIRCH_TOKEN = data.refresh_token;
     }
     writeFileSync("./src/auth.json", JSON.stringify(authInfo));
   } else {
     console.log(data.status);
-    return;
   }
 }
+
 export async function getRewards(fetchURL) {
   const res = await fetch(fetchURL, 
     {
