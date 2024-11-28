@@ -142,8 +142,8 @@ eventSubClient.on("connect", async function (connection) {
       console.log("IN INVALID OAUTH TOKEN");
       refreshToken(authInfo.REFRESH_TWITCH_TOKEN, "broadcaster");
       console.log("____________________GOT NEW BROADCASTER TOKEN_______________");
-      IRC_connection.close();
-      ircClient.connect("ws://irc-ws.chat.twitch.tv:80");
+      //IRC_connection.close();
+      ///ircClient.connect("ws://irc-ws.chat.twitch.tv:80");
       return;
     } 
       if (data.metadata.message_type === "session_reconnect") {
