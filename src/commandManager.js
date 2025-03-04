@@ -13,7 +13,7 @@ export class CommandManager {
 
   onMessage(message) {
     if (message.type === "utf8") {
-      let rawIrcMessage = message.utf8Data.trimEnd();
+      let rawIrcMessage = message.utf8Data.normalize("NFKC").replace(/\uDB40\uDC00/g, "").trim()
       /*console.log(
         `Message received (${new Date().toISOString()}): '${rawIrcMessage}'\n`
       );

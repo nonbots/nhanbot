@@ -266,6 +266,7 @@ ircClient.on("connect", function (connection) {
     );
   });
   
+
   commandManager.addCommand(commands.save, async(message) => {
     const addedBy = message.source.nick;
     if (isVideoIdSaved(addedBy, savedVideoIds, song.videoId)) {
@@ -324,6 +325,10 @@ ircClient.on("connect", function (connection) {
     }
     const vidInfo = await getVidInfo(url, authInfo.YT_API_KEY);
     console.log(vidInfo);
+    if (!vidInfo) {
+      connection.sendUTF(`PRIVMSG ${message.command.channel} : @${addedBy}, This url is invalid.`);
+      return;
+    }
     if (vidInfo.error === "liveStreamRestriction") {
       connection.sendUTF(`privmsg ${message.command.channel} : @${addedBy}, Live streams can't be added, :(.`);
       return;
@@ -417,6 +422,18 @@ ircClient.on("connect", function (connection) {
  commandManager.addCommand("discord", (message) => {
     connection.sendUTF(
       `PRIVMSG ${message.command.channel} : discord community: https://discord.gg/ku8vVEmuJY`
+    );
+  });
+
+ commandManager.addCommand("internet", (message) => {
+    connection.sendUTF(
+      `PRIVMSG ${message.command.channel} : Tech guy came back this morning. Checked the house and climbed the electrical pole. Said we doesn't see anything wrong but said the neighbors has also been complaining and the the engineer will come later in the week and do something with the pole LUL`
+    );
+  });
+
+ commandManager.addCommand("video", (message) => {
+    connection.sendUTF(
+      `PRIVMSG ${message.command.channel} : subscribe & like: https://youtube.com/shorts/-q5_7QtPhA8?si=U9EqUJxH7dGoPAEm`
     );
   });
 
